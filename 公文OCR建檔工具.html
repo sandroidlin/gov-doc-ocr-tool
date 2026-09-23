@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>米花市教育局公文建檔</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  /*
+    Visual system taken from monday.com's "Vibe" design system
+    (https://vibe.monday.com — Foundations / Colors, Typography, Spacing,
+    Round Corners), read directly off its live token set. Same component
+    library's spirit, rebuilt in plain CSS: no React/build step, this stays
+    a single file you just open.
+  */
+  :root{
+    --v-primary:#0073ea;
+    --v-primary-hover:#0060b9;
+    --v-primary-selected:#cce5ff;
+    --v-primary-selected-hover:#aed4fc;
+    --v-primary-surface:#eceff8;
+    --v-primary-highlight:#f0f7ff;
+    --v-text:#323338;
+    --v-text-secondary:#676879;
+    --v-border:#c3c6d4;
+    --v-border-layout:#d0d4e4;
+    --v-bg:#ffffff;
+    --v-bg-grey:#f6f7fb;
+    --v-bg-disabled:#ecedf5;
+    --v-negative:#d83a52;
+    --v-negative-selected:#f4c3cb;
+    --v-positive:#00854d;
+    --v-positive-selected:#bbdbc9;
+    --v-warning-text:#8a6d00;
+    --v-warning-selected:#fceba1;
+    --v-indigo:#5559df;
+    --v-indigo-selected:#aaacef;
+    --v-link:#1f76c2;
+    --v-shadow-xs:0 4px 6px -4px rgba(0,0,0,.12);
+    --v-shadow-sm:0 4px 8px rgba(0,0,0,.16);
+    --v-shadow-md:0 6px 20px rgba(0,0,0,.18);
+    --v-radius-sm:4px;
+    --v-radius-md:8px;
+    --v-radius-lg:16px;
+    --v-font-title:"Poppins","Noto Sans TC",sans-serif;
+    --v-font-body:"Figtree","Noto Sans TC",sans-serif;
+    --v-mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--v-bg-grey);
+    color:var(--v-text);
+    font-family:var(--v-font-body);
+    font-size:14px;
+    line-height:1.5;
+    padding:32px 24px 80px;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+  header{
+    position:sticky; top:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:14px 0; margin:-32px 0 24px; flex-wrap:wrap;
+    background:var(--v-bg-grey); border-bottom:1px solid var(--v-border-layout);
+  }
+  header h1{
+    font-family:var(--v-font-title); font-size:1.5rem; margin:0; font-weight:600; letter-spacing:-.01em;
+    color:var(--v-text); transition:font-size .15s;
+  }
+  header h1 span{color:var(--v-primary);}
+  header p{
+    margin:4px 0 0; color:var(--v-text-secondary); font-size:.78rem; max-width:520px;
+    overflow:hidden; max-height:40px; opacity:1; transition:max-height .15s, opacity .15s, margin .15s;
+  }
+  header.scrolled h1{ font-size:1.1rem; }
+  header.scrolled p{ max-height:0; opacity:0; margin-top:0; }
+  .stats{font-size:.8rem; color:var(--v-text-secondary); display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .stats b{color:var(--v-text); font-size:1.15rem; font-family:var(--v-font-title); font-weight:600;}
+
+  #dropzone{
+    border:1.5px dashed var(--v-border);
+    border-radius:var(--v-radius-md);
+    background:var(--v-bg);
+    padding:36px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:background .15s, border-color .15s;
+    margin-bottom:20px;
+  }
+  #dropzone:hover{ border-color:var(--v-primary); background:var(--v-primary-highlight); }
+  #dropzone.drag{ background:var(--v-primary-highlight); border-color:var(--v-primary); }
+  #dropzone .icon{ color:var(--v-text-secondary); margin-bottom:8px; }
+  #dropzone .icon svg{ width:32px; height:32px; }
+  #dropzone p{margin:2px 0; color:var(--v-text-secondary); font-size:.85rem;}
+  #dropzone .main-line{color:var(--v-text); font-size:1rem; font-weight:600; margin-bottom:4px;}
+  #fileInput{display:none;}
+
+  #engineStatus{
+    font-size:.78rem; color:var(--v-text-secondary); margin:-10px 0 18px; text-align:center;
+    font-family:var(--v-mono);
+  }
+
+  .count-pill{
+    font-size:.78rem; color:var(--v-text-secondary); white-space:nowrap;
+  }
+
+  .filters{
+    display:flex; flex-direction:column; gap:10px; margin-bottom:20px;
+  }
+  .filters-search{
+    width:100%; padding:9px 14px; border:1px solid var(--v-border); border-radius:var(--v-radius-sm);
+    background:var(--v-bg); color:var(--v-text); font-family:inherit; font-size:.88rem;
+    transition:border-color .1s, box-shadow .1s;
+  }
+  .filters-search:focus{ outline:none; border-color:var(--v-primary); box-shadow:0 0 0 2px var(--v-primary-selected); }
+  .filters-row{
+    display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+  }
+
+  .multiselect{ position:relative; }
+  .multiselect-btn{
+    font-family:inherit; font-size:.82rem; color:var(--v-text); background:var(--v-bg);
+    border:1px solid var(--v-border); border-radius:var(--v-radius-sm); padding:8px 12px; cursor:pointer; white-space:nowrap;
+    transition:border-color .1s, background .1s;
+  }
+  .multiselect-btn:hover{ border-color:var(--v-primary); background:var(--v-primary-highlight); }
+  .multiselect-btn.has-selection{ border-color:var(--v-primary); color:var(--v-primary); background:var(--v-primary-highlight); font-weight:600; }
+  .multiselect-panel{
+    position:absolute; top:calc(100% + 4px); left:0; z-index:20; min-width:240px; max-width:320px;
+    max-height:280px; overflow-y:auto; background:var(--v-bg); border:1px solid var(--v-border);
+    border-radius:var(--v-radius-sm); padding:8px; box-shadow:var(--v-shadow-md);
+  }
+  .multiselect-panel label{
+    display:flex; align-items:center; gap:8px; padding:7px 8px; font-size:.83rem; border-radius:var(--v-radius-sm); cursor:pointer;
+  }
+  .multiselect-panel label:hover{ background:var(--v-bg-grey); }
+  .multiselect-panel .empty-hint{ padding:8px 6px; font-size:.8rem; color:var(--v-text-secondary); }
+  .multiselect-panel .ms-actions{
+    display:flex; justify-content:space-between; padding:4px 6px 8px; border-bottom:1px solid var(--v-border-layout); margin-bottom:6px;
+  }
+  .multiselect-panel .ms-actions button{
+    font-family:inherit; font-size:.72rem; font-weight:600; color:var(--v-primary); background:none; border:none; cursor:pointer; padding:0;
+  }
+
+  .date-range{ display:flex; align-items:center; gap:6px; font-size:.8rem; color:var(--v-text-secondary); flex-wrap:wrap; }
+  .date-range input[type=date]{
+    padding:7px 9px; border:1px solid var(--v-border); background:var(--v-bg); color:var(--v-text);
+    border-radius:var(--v-radius-sm); font-family:inherit; font-size:.82rem;
+  }
+  .date-range input[type=date]:focus{ outline:none; border-color:var(--v-primary); box-shadow:0 0 0 2px var(--v-primary-selected); }
+
+  table{width:100%; border-collapse:collapse; background:var(--v-bg); font-size:.85rem; margin-top:16px; border-radius:var(--v-radius-md); overflow:hidden; box-shadow:var(--v-shadow-xs);}
+  thead th{
+    text-align:left; font-size:.72rem; letter-spacing:.03em; color:var(--v-text-secondary); text-transform:uppercase;
+    background:var(--v-bg-grey); border-bottom:1px solid var(--v-border-layout); padding:10px 12px; font-weight:600; white-space:nowrap;
+  }
+  thead th.sortable{ cursor:pointer; user-select:none; }
+  thead th.sortable:hover{ color:var(--v-primary); }
+  thead th.sortable .sort-arrows{
+    display:inline-flex; flex-direction:column; vertical-align:middle; margin-left:4px; gap:1px; line-height:0;
+  }
+  thead th.sortable .sort-arrows svg{ width:8px; height:8px; display:block; }
+  thead th.sortable .sort-arrows .sa-up,
+  thead th.sortable .sort-arrows .sa-down{ color:var(--v-text-secondary); opacity:.4; }
+  thead th.sortable.sort-active .sort-arrows .sa-up.active,
+  thead th.sortable.sort-active .sort-arrows .sa-down.active{ color:var(--v-primary); opacity:1; }
+  tbody td{ padding:12px; border-bottom:1px solid var(--v-border-layout); vertical-align:top; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background:var(--v-bg-grey); }
+  .filename{font-weight:600; font-size:.85rem;}
+  .subtitle-cell{ max-width:280px; }
+  .subtitle-cell .clamp{
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+    color:var(--v-text); line-height:1.45;
+  }
+  .muted{color:var(--v-text-secondary);}
+
+  .chip{
+    display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:12px;
+    font-size:.68rem; font-weight:600; white-space:nowrap; line-height:1.7;
+  }
+  .chip.tone-sent{ background:var(--v-primary-selected); color:var(--v-primary-hover); }
+  .chip.tone-received{ background:var(--v-positive-selected); color:var(--v-positive); }
+  .chip.tone-internal{ background:var(--v-indigo-selected); color:var(--v-indigo); }
+  .chip.tone-unknown{ background:var(--v-bg-disabled); color:var(--v-text-secondary); }
+  .chip.tone-processing{ background:var(--v-warning-selected); color:var(--v-warning-text); }
+  .chip.tone-error{ background:var(--v-negative-selected); color:var(--v-negative); }
+  .row-tags{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:5px; }
+
+  .checkbox-cell{ width:36px; padding-right:0 !important; }
+  .row-checkbox, .select-all-checkbox{ width:16px; height:16px; cursor:pointer; accent-color:var(--v-primary); vertical-align:middle; }
+  tbody tr.row-selected{ background:var(--v-primary-highlight); }
+  tbody tr.row-selected:hover{ background:var(--v-primary-selected); }
+
+  /* Same flex layout as .filters-row on purpose — this bar swaps in for
+     that row when something's selected, so matching its shape (not just
+     roughly its height) keeps the table from jumping when they trade places.
+     Both rows stay stacked in the same grid cell (rather than one being
+     display:none) so the swap can crossfade instead of hard-cutting — and
+     since neither is ever actually removed from flow, the grid track's
+     height never has to jump to accommodate just one of them. */
+  .filter-slot{ display:grid; }
+  .filter-slot > *{ grid-area:1 / 1; }
+  .filters-row, .bulk-action-bar{
+    display:flex; gap:8px; align-items:center; flex-wrap:wrap; min-height:37px;
+    opacity:1; transform:translateY(0); visibility:visible;
+    transition:opacity .16s ease, transform .16s ease;
+  }
+  .filters-row.slot-hidden, .bulk-action-bar.slot-hidden{
+    opacity:0; transform:translateY(-4px); visibility:hidden; pointer-events:none;
+    transition:opacity .16s ease, transform .16s ease, visibility 0s linear .16s;
+  }
+  .bulk-action-bar .bulk-count{
+    font-size:.78rem; font-weight:600; color:var(--v-primary);
+    background:var(--v-primary-selected); padding:6px 10px; border-radius:var(--v-radius-sm); white-space:nowrap;
+  }
+  .bulk-action-bar .bulk-spacer{ flex:1; }
+
+  .actions{ display:flex; align-items:center; gap:6px; flex-wrap:nowrap; }
+  .icon-actions{ display:flex; align-items:center; gap:2px; margin-left:auto; }
+  .icon-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:30px; height:30px; flex:none; padding:0; border:none; background:transparent;
+    color:var(--v-text-secondary); cursor:pointer; border-radius:var(--v-radius-sm);
+    transition:background .1s, color .1s;
+  }
+  /* Inside a flex row, a bare inline <svg> is a replaced element with no
+     intrinsic size of its own — under space pressure flexbox can shrink it
+     straight to 0 even with an explicit width set, unlike text content.
+     flex:none plus min-width/min-height pins its box so it never collapses. */
+  .icon-btn svg{ width:16px; height:16px; min-width:16px; min-height:16px; flex:none; }
+  .icon-btn:hover{ background:var(--v-bg-grey); color:var(--v-primary); }
+  .icon-btn.danger:hover{ background:var(--v-negative-selected); color:var(--v-negative); }
+  .icon-btn:disabled{ opacity:.35; cursor:not-allowed; }
+  .icon-btn:disabled:hover{ background:transparent; color:var(--v-text-secondary); }
+  button.act{
+    font-family:inherit; font-size:.75rem; font-weight:600; border:1px solid var(--v-border); background:var(--v-bg);
+    color:var(--v-text); padding:6px 10px; border-radius:var(--v-radius-sm); cursor:pointer;
+    transition:border-color .1s, background .1s, color .1s;
+  }
+  button.act:hover{ border-color:var(--v-primary); color:var(--v-primary); background:var(--v-primary-highlight); }
+  button.act.danger:hover{ border-color:var(--v-negative); color:var(--v-negative); background:var(--v-negative-selected); }
+  button.act:disabled{ opacity:.4; cursor:not-allowed; }
+  button.act:disabled:hover{ border-color:var(--v-border); color:var(--v-text); background:var(--v-bg); }
+
+  .empty-state{ text-align:center; padding:50px 20px; color:var(--v-text-secondary); font-size:.9rem; }
+
+  /* unified detail dialog: PDF preview left, content (view or edit) right */
+  .meta-grid{
+    display:grid; grid-template-columns:110px 1fr; gap:10px 14px; font-size:.85rem; margin-bottom:20px;
+  }
+  .meta-grid dt{ color:var(--v-text-secondary); font-weight:600; }
+  .meta-grid dd{ margin:0; }
+  .fulltext-block{
+    white-space:pre-wrap; font-family:var(--v-mono); font-size:.78rem; background:var(--v-bg-grey);
+    border:1px solid var(--v-border-layout); border-radius:var(--v-radius-sm); padding:14px; max-height:340px; overflow-y:auto; line-height:1.6;
+  }
+  .modal-actions{ display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0; }
+  .modal-actions button{ flex-shrink:0; }
+  .modal-actions button:not(.icon-btn){
+    font-family:inherit; font-weight:600; padding:9px 18px; border-radius:var(--v-radius-sm); font-size:.85rem; cursor:pointer;
+    transition:background .1s, border-color .1s;
+  }
+  .btn-primary{ background:var(--v-primary); color:#fff; border:1px solid var(--v-primary); }
+  .btn-primary:hover{ background:var(--v-primary-hover); border-color:var(--v-primary-hover); }
+  .btn-secondary{ background:transparent; color:var(--v-text); border:1px solid var(--v-border); }
+  .btn-secondary:hover{ border-color:var(--v-primary); color:var(--v-primary); }
+  .btn-secondary.btn-danger:hover{ border-color:var(--v-negative); color:var(--v-negative); background:var(--v-negative-selected); }
+
+  #importOverlay{
+    position:fixed; inset:0; background:rgba(41,47,76,.55); display:none;
+    align-items:flex-start; justify-content:center; padding:40px 16px; z-index:55; overflow-y:auto;
+  }
+  #importOverlay.show{ display:flex; }
+  #importModal{
+    background:var(--v-bg); max-width:640px; width:100%; border-radius:var(--v-radius-md);
+    border:1px solid var(--v-border-layout); box-shadow:var(--v-shadow-md); padding:22px 24px; margin-bottom:40px;
+  }
+  #importModal .edit-modal-header{ margin-bottom:18px; }
+  #importModal #dropzone{ margin-bottom:12px; }
+
+  #detailOverlay{
+    position:fixed; inset:0; background:rgba(41,47,76,.55); display:none;
+    align-items:center; justify-content:center; padding:24px 16px; z-index:55;
+  }
+  #detailOverlay.show{ display:flex; }
+  #detailModal{
+    background:var(--v-bg); max-width:1180px; width:100%; height:100%; max-height:88vh;
+    border-radius:var(--v-radius-md); border:1px solid var(--v-border-layout); box-shadow:var(--v-shadow-md); padding:22px 24px;
+    display:flex; flex-direction:column;
+  }
+  .edit-modal-header{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    margin-bottom:14px; flex-shrink:0;
+  }
+  .edit-modal-header h2{ font-family:var(--v-font-title); margin:0 0 4px; font-size:1.15rem; font-weight:600; word-break:break-all; }
+  .edit-modal-body{
+    display:flex; gap:20px; flex:1; min-height:0;
+  }
+  .edit-preview-pane{
+    flex:1.1; min-width:0; border:1px solid var(--v-border-layout); border-radius:var(--v-radius-sm); overflow:hidden; background:var(--v-bg-grey);
+  }
+  .edit-preview-pane iframe{ width:100%; height:100%; border:none; }
+  .edit-form-pane{ flex:1; min-width:0; overflow-y:auto; padding-right:6px; }
+  .edit-grid{
+    display:grid; grid-template-columns:100px 1fr; gap:10px 14px; align-items:start;
+  }
+  .edit-grid label{ font-size:.8rem; color:var(--v-text-secondary); padding-top:8px; }
+  .edit-grid input, .edit-grid select, .edit-grid textarea{
+    width:100%; padding:7px 10px; border:1px solid var(--v-border); background:var(--v-bg);
+    color:var(--v-text); border-radius:var(--v-radius-sm); font-family:inherit; font-size:.85rem; resize:vertical;
+  }
+  .edit-grid input:focus, .edit-grid select:focus, .edit-grid textarea:focus{
+    outline:none; border-color:var(--v-primary); box-shadow:0 0 0 2px var(--v-primary-selected);
+  }
+  @media (max-width:900px){
+    #detailModal{ max-width:100%; padding:18px; }
+    .edit-modal-body{ flex-direction:column; overflow-y:auto; }
+    .edit-preview-pane{ flex:none; height:280px; }
+    .edit-form-pane{ flex:none; overflow-y:visible; }
+    .edit-grid{ grid-template-columns:1fr; }
+    .edit-grid label{ padding-top:0; }
+  }
+
+  footer{ text-align:center; color:var(--v-text-secondary); font-size:.72rem; margin-top:40px; }
+
+  @media (max-width:640px){
+    .meta-grid{ grid-template-columns:90px 1fr; }
+    table, thead, tbody, tr, td, th{ display:block; }
+    thead{ display:none; }
+    tbody tr{ border-bottom:2px solid var(--v-border-layout); padding:10px 0; }
+    tbody td{ border-bottom:none; padding:4px 12px; }
+    tbody td::before{ content:attr(data-label); display:block; font-size:.68rem; color:var(--v-text-secondary); margin-bottom:2px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span>米花市政府教育局</span> 公文 OCR 建檔工具</h1>
+      <p id="pageSubtitle">資料僅儲存於此瀏覽器（IndexedDB），清除瀏覽器資料將會遺失清單。原始 PDF 與辨識結果皆不會上傳到任何伺服器。</p>
+    </div>
+    <div class="stats">
+      <div><b id="totalCount">0</b> 筆文件</div>
+      <button class="btn-primary" id="openImportBtn" type="button">匯入公文資料</button>
+    </div>
+  </header>
+
+  <section id="page-list">
+  <div class="filters">
+    <input id="searchBox" type="text" class="filters-search" placeholder="關鍵字查詢：檔名、字號、主旨、全文內容…">
+
+    <!-- 這兩個 row 佔用同一個位置：有勾選時 bulk-action-bar 取代
+         filters-row 顯示，而不是疊加在它下面，這樣表格才不會被往下推。 -->
+    <div class="filter-slot">
+      <div class="filters-row" id="filtersRow">
+        <div class="multiselect" id="agencyFilterWrap">
+          <button type="button" class="multiselect-btn" id="agencyFilterBtn">篩選發文者</button>
+          <div class="multiselect-panel" id="agencyFilterPanel" hidden></div>
+        </div>
+        <div class="multiselect" id="recipientFilterWrap">
+          <button type="button" class="multiselect-btn" id="recipientFilterBtn">篩選收文者</button>
+          <div class="multiselect-panel" id="recipientFilterPanel" hidden></div>
+        </div>
+        <div class="date-range">
+          <label>日期區間（西元）</label>
+          <input type="date" id="dateFromInput">
+          <span>～</span>
+          <input type="date" id="dateToInput">
+        </div>
+        <button class="act" id="clearFiltersBtn" type="button">清除篩選</button>
+        <span class="count-pill" id="filterCount"></span>
+      </div>
+
+      <div class="bulk-action-bar slot-hidden" id="bulkActionBar">
+        <span class="bulk-count" id="bulkCount">已選取 0 筆</span>
+        <button class="act" id="bulkClearBtn" type="button">取消選取</button>
+        <span class="bulk-spacer"></span>
+        <button class="act" id="bulkDownloadMdBtn" type="button">下載 Markdown 檔案</button>
+        <button class="act danger" id="bulkDeleteBtn" type="button">刪除選取項目</button>
+      </div>
+    </div>
+  </div>
+
+  <table id="docTable">
+    <thead>
+      <tr>
+        <th class="checkbox-cell"><input type="checkbox" class="select-all-checkbox" id="selectAllCheckbox" title="全選／取消全選"></th>
+        <th>主旨</th>
+        <th>發文者</th>
+        <th>收文者</th>
+        <th class="sortable" id="dateSortHeader">日期<span class="sort-arrows" id="dateSortArrow">
+          <svg class="sa-up" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 1.5L9 7.5H1L5 1.5Z" fill="currentColor"/></svg>
+          <svg class="sa-down" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 8.5L1 2.5H9L5 8.5Z" fill="currentColor"/></svg>
+        </span></th>
+        <th>密等</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="emptyState" class="empty-state">尚未上傳任何文件</div>
+  </section>
+</div>
+
+<div id="importOverlay">
+  <div id="importModal">
+    <div class="edit-modal-header">
+      <div>
+        <h2>匯入公文資料</h2>
+        <div class="modal-sub">拖曳或選擇 PDF 檔案開始辨識，全部完成後再關閉這個視窗即可。</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="reocrAllBtn" type="button">全部重新辨識</button>
+        <button class="btn-secondary btn-danger" id="deleteAllBtn" type="button">刪除全部資料</button>
+        <button class="btn-primary" id="importCloseBtn" type="button">關閉</button>
+      </div>
+    </div>
+    <div id="dropzone">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 2.5H14L19 7.5V20.5C19 21.05 18.55 21.5 18 21.5H6C5.45 21.5 5 21.05 5 20.5V3.5C5 2.95 5.45 2.5 6 2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <path d="M14 2.5V7.5H19" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <path d="M8 12H16M8 15.5H16M8 18.5H12.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="main-line">將公文 PDF 拖曳到這裡，或點擊選擇檔案</div>
+      <p>支援多檔同時上傳・PDF 格式・辨識完全在本機瀏覽器內進行</p>
+      <input id="fileInput" type="file" accept="application/pdf" multiple>
+    </div>
+    <div id="engineStatus"></div>
+  </div>
+</div>
+
+<div id="detailOverlay">
+  <div id="detailModal">
+    <div class="edit-modal-header">
+      <div>
+        <h2 id="detailModalTitle">檔案名稱</h2>
+        <div class="modal-sub" id="detailModalSub"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="detailEditToggleBtn">校正內容</button>
+        <button class="btn-secondary" id="detailDownloadBtn">下載原始檔案</button>
+        <button class="icon-btn" id="detailCloseBtn" title="關閉" aria-label="關閉">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="edit-modal-body">
+      <div class="edit-preview-pane">
+        <iframe id="detailPdfFrame" title="原始公文預覽"></iframe>
+      </div>
+      <div class="edit-form-pane">
+        <div id="detailViewPane">
+          <dl class="meta-grid" id="detailMetaGrid"></dl>
+          <div class="fulltext-block" id="detailFulltext"></div>
+        </div>
+        <div id="detailEditPane" hidden>
+          <div class="edit-grid">
+            <label for="detailEditDocType">文別</label>
+            <select id="detailEditDocType">
+              <option value="令">令</option>
+              <option value="呈">呈</option>
+              <option value="咨">咨</option>
+              <option value="函">函</option>
+              <option value="公告">公告</option>
+              <option value="簽">簽</option>
+              <option value="書函">書函</option>
+              <option value="開會通知單">開會通知單</option>
+              <option value="其他公文">其他公文</option>
+            </select>
+
+            <label for="detailEditAgency">發文者</label>
+            <input id="detailEditAgency" type="text">
+
+            <label for="detailEditRecipient">受文者</label>
+            <input id="detailEditRecipient" type="text">
+
+            <label for="detailEditDocNumber">發文字號</label>
+            <input id="detailEditDocNumber" type="text">
+
+            <label for="detailEditDocDate">發文日期</label>
+            <input id="detailEditDocDate" type="text" placeholder="例如：中華民國115年3月28日">
+
+            <label for="detailEditSpeed">速別</label>
+            <input id="detailEditSpeed" type="text">
+
+            <label for="detailEditSecurity">密等</label>
+            <input id="detailEditSecurity" type="text">
+
+            <label for="detailEditDeclassify">解密條件</label>
+            <input id="detailEditDeclassify" type="text">
+
+            <label for="detailEditSubject">主旨/案由</label>
+            <textarea id="detailEditSubject" rows="2"></textarea>
+
+            <label for="detailEditExplanation">說明</label>
+            <textarea id="detailEditExplanation" rows="3"></textarea>
+
+            <label for="detailEditProposal">擬辦</label>
+            <textarea id="detailEditProposal" rows="2"></textarea>
+
+            <label for="detailEditAttachment">附件</label>
+            <input id="detailEditAttachment" type="text">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const DB_NAME = "gov-doc-ocr";
+const STORE = "documents";
+
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbPut(record){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).put(record);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function dbGetAll(){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDelete(id){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function dbClear(){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+let records = [];
+let worker = null;
+let workerReady = false;
+
+// --- 發文 / 收文 / 局內 classification --------------------------------------
+// This tool is dedicated to 米花市政府教育局.
+// 局內 (internal): 簽 is, by Taiwanese government document convention, always
+// an internal routing/approval document — it never leaves the issuing office
+// — so docType alone is a reliable signal and doesn't depend on OCR having
+// caught the full agency name (internal memos often print just the division,
+// e.g. "國教科", not the full "米花市政府教育局國教科").
+// 發文 (outgoing): 發文機關 names this office (for 函/書函/公告 etc.).
+// 收文 (incoming): 受文者 names this office. A 受文者 is often a generic
+// circular list rather than this office by name — e.g. "各直轄市、縣(市)
+// 政府教育局(處)" — so a line starting with 各 that mentions 教育局/教育處
+// also counts as addressed to us.
+const OUR_ORG = "米花市政府教育局";
+const OUR_ORG_UNIT = "教育局";
+// docType carries its own "簽" value, but the 發文字號 pattern is kept as a
+// second, independent signal — it still catches an internal memo even if
+// docType was misclassified or a user changed it manually.
+const IS_INTERNAL_MEMO_RE = /簽第/;
+
+function classifyDirection(meta){
+  if (!meta) return "unknown";
+  if (meta.docType === "簽" || IS_INTERNAL_MEMO_RE.test(meta.docNumber || "")) return "internal";
+  const agencyMatch = !!(meta.agency && meta.agency.includes(OUR_ORG));
+  const recipientText = (meta.recipient || "").trim();
+  const recipientMatch = !!recipientText && (
+    recipientText.includes(OUR_ORG) ||
+    (/^各/.test(recipientText) && (recipientText.includes(OUR_ORG_UNIT) || recipientText.includes("教育處")))
+  );
+  if (agencyMatch && !recipientMatch) return "sent";
+  if (recipientMatch && !agencyMatch) return "received";
+  if (agencyMatch && recipientMatch) return "sent";
+  return "unknown";
+}
+const DIRECTION_LABEL = { sent: "發文", received: "收文", internal: "局內", unknown: "未分類" };
+
+async function getWorker(){
+  if (workerReady) return worker;
+  const statusEl = document.getElementById("engineStatus");
+  statusEl.textContent = "首次使用需下載中文 OCR 語言模型，請稍候…";
+  worker = await Tesseract.createWorker("chi_tra+eng", 1, {
+    logger: (m) => {
+      if (m.status && typeof m.progress === "number") {
+        statusEl.textContent = `OCR 引擎：${m.status}（${Math.round(m.progress * 100)}%）`;
+      }
+    },
+  });
+  workerReady = true;
+  statusEl.textContent = "OCR 引擎已就緒";
+  setTimeout(() => { if (workerReady) statusEl.textContent = ""; }, 2500);
+  return worker;
+}
+
+async function renderPdfPages(arrayBuffer){
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const canvases = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2.2 });
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext("2d");
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    canvases.push(canvas);
+  }
+  return canvases;
+}
+
+// --- 公文 metadata extraction -------------------------------------------------
+// Tesseract's Traditional-Chinese model commonly inserts a space between every
+// CJK glyph (and around adjacent digits/punctuation). Collapse that back down
+// before any label matching, and drop lines the engine duplicated (a frequent
+// artifact on boxed form headers) so a label doesn't swallow its own repeat.
+function cleanOcrText(raw){
+  let t = (raw || "").replace(/\r/g, "");
+  t = t.replace(/[ \t]*\n[ \t]*/g, "\n");
+  // strip whitespace touching a CJK character on either side
+  for (let i = 0; i < 3; i++) {
+    t = t.replace(/([一-鿿豈-﫿])[ \t]+/g, "$1");
+    t = t.replace(/[ \t]+([一-鿿豈-﫿])/g, "$1");
+  }
+  t = t.replace(/[ \t]{2,}/g, " ");
+  // collapse an immediately repeated "label:" line (OCR double-reads boxed headers)
+  t = t.replace(/([一-鿿]{2,10}[:：])\n\1/g, "$1");
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// Fields are matched only at the START of a (trimmed) line, then a field's
+// value keeps absorbing following lines until the next recognized label.
+// This is what makes it safe for a label word to reappear mid-sentence
+// elsewhere in the document (e.g. "附件：如說明" or "...擬具修正說明,")
+// without being mistaken for the actual "說明" section header.
+const FIELD_DEFS = [
+  ["docNumber", /^(?:發文字號|字\s*號)[:：]?\s*/],
+  ["docDate", /^(?:發文日期)[:：]?\s*/],
+  ["speed", /^(?:速別)[:：]?\s*/],
+  // "期限" is a single trailing-ish glyph run inside a longer label, exactly
+  // the kind of thing OCR misreads (seen as "期腿") — without the wildcard
+  // tail, a misread there falls back to matching just "密等" and leaves
+  // "及解密條件或保密期X:" stuck onto the front of the captured value.
+  ["security", /^密等(?:及解密條件或保密期.{0,2})?[:：]?\s*/],
+  // An attachment divider page is often titled "附件一：<real title>" —
+  // strip the optional numbering too, so the captured value is just the title.
+  ["attachment", /^附件[一二三四五六七八九十0-9]*[:：]?\s*/],
+  ["recipient", /^(?:受文者)[:：]?\s*/],
+  ["subject", /^(?:主旨|案由)[:：]?\s*/],
+  ["explanation", /^(?:說明)[:：]?\s*/],
+  ["proposal", /^(?:擬辦(?:事項)?)[:：]?\s*/],
+];
+// Lines starting with these end whatever field was open, without becoming a
+// captured field themselves (so e.g. 正本/副本 don't get absorbed into 說明).
+const TERMINAL_RE = /^(?:正本|副本|承辦人|會辦|批示|檔號|保存年限|地址|聯絡人|聯絡方式|電話|電子郵件|機關全銜|上呈|敬陳|第\s*\d+\s*頁)/;
+// A short field (附件, 主旨, 速別…) should never run past the page it started
+// on — a page break almost always means "the attached document's own text
+// starts here", not "this field continues". 說明/擬辦 are the exception:
+// long documents routinely wrap those across pages.
+const PAGE_BREAK = " PAGE ";
+const CONTINUES_ACROSS_PAGES = new Set(["explanation", "proposal"]);
+// These are always a single line in a real 公文 — locking them the instant
+// they're captured stops a stray line right after from bleeding in when
+// OCR misreads the NEXT label (e.g. "速別" → "加別" isn't recognized as a
+// label, so without the lock it silently gets appended onto 發文字號).
+const SINGLE_LINE_FIELDS = new Set(["docNumber", "docDate", "speed", "security", "recipient"]);
+
+function parseFields(norm){
+  const lines = norm.split("\n").map(l => l.trim()).filter(l => l.length);
+  const out = {};
+  let current = null;
+  for (const line of lines) {
+    if (line === PAGE_BREAK) {
+      if (current && !CONTINUES_ACROSS_PAGES.has(current)) current = null;
+      continue;
+    }
+    const hit = FIELD_DEFS.find(([, re]) => re.test(line));
+    if (hit) {
+      const [key, re] = hit;
+      // A label line always starts (or restarts) that field — it never
+      // appends to a value already captured. This matters for e.g. 附件:
+      // the cover letter often just says "附件：如說明" while an actual
+      // attachment divider page later reads "附件一：<real title>"; without
+      // this, the two would get glued into "如說明 一：<real title>"
+      // instead of the second, more specific occurrence simply replacing
+      // the placeholder.
+      current = SINGLE_LINE_FIELDS.has(key) ? null : key;
+      out[key] = line.replace(re, "");
+      continue;
+    }
+    if (TERMINAL_RE.test(line)) { current = null; continue; }
+    if (current) out[current] = (out[current] || "") + " " + line;
+  }
+  for (const k in out) out[k] = out[k].replace(/\s+/g, " ").trim();
+  return out;
+}
+
+const AGENCY_SUFFIX = "(局|處|府|署|部|委員會|科|室|中心|管理處|事務所|公所|公司|行|學校|國小|國中|高中)";
+const AGENCY_SUFFIX_RE = new RegExp(AGENCY_SUFFIX + "$");
+
+// The 發文機關/公司 name is reliably the visually largest line near the top
+// of page 1 (the letterhead) — Tesseract's line-level bbox data lets us find
+// it by height instead of by text pattern, which is what actually breaks:
+// small metadata (檔號, 保存年限…) is ~21-28px tall, the letterhead is
+// consistently ~40px, a gap wide enough that a height threshold is reliable
+// even when OCR misreads characters within the line.
+function findTitleLineIndex(lines, pageHeight){
+  if (!lines || !lines.length) return -1;
+  const heights = lines.map(l => l.bbox.y1 - l.bbox.y0);
+  const sorted = [...heights].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] || 1;
+  const topRegion = lines
+    .map((l, idx) => ({ idx, h: l.bbox.y1 - l.bbox.y0, y0: l.bbox.y0 }))
+    .filter(l => l.y0 < pageHeight * 0.4);
+  if (!topRegion.length) return -1;
+  topRegion.sort((a, b) => b.h - a.h);
+  return topRegion[0].h >= median * 1.3 ? topRegion[0].idx : -1;
+}
+
+// The letterhead line's trailing 函/簽/書函/… marker is exactly the kind of
+// single distinctive glyph OCR most often mis-reads (seen misread as "數"
+// in practice) — stripping the known marker first, and otherwise trying
+// "drop the last character", recovers the agency name either way.
+// Rather than trying to strip a trailing 函/簽/公告/… marker (and OCR noise
+// around it — a stray quote-like glyph, or the marker itself misread into
+// an unrelated character like "銷" or "數"), find the LAST place in the
+// line an agency-type suffix occurs and cut there. The trailing doc-type
+// marker always comes after the real agency name, so whatever garbage
+// trails it is simply discarded — this doesn't depend on recognizing what
+// that garbage looks like, only on where the agency name itself ends.
+function extractAgencyFromTitleLine(titleLineRaw){
+  if (!titleLineRaw) return "";
+  const original = cleanOcrText(titleLineRaw).replace(/\n/g, "").trim();
+  if (!original) return "";
+  const matches = [...original.matchAll(new RegExp(AGENCY_SUFFIX, "g"))];
+  const last = matches[matches.length - 1];
+  if (last) {
+    const cut = original.slice(0, last.index + last[0].length);
+    if (cut.length >= 3) return cut;
+  }
+  return original;
+}
+
+// "如說明" / "詳如說明" etc. is a placeholder meaning "see the 說明 section"
+// — it's not the attachment's actual title, just a pointer to prose that
+// often doesn't spell the title out either (as in the 附件檢附…一份 case).
+const ATTACHMENT_PLACEHOLDER_RE = /^(如說明|詳如說明|如上|如附|如附件|如上開說明)$/;
+
+function extractMetadata(rawText, titleLineRaw, pageTitleLines){
+  const norm = cleanOcrText(rawText);
+  const headerLines = norm.split("\n").map(l => l.trim()).filter(Boolean).slice(0, 8);
+
+  const fields = parseFields(norm);
+  const docNumber = fields.docNumber
+    || (norm.match(/[一-鿿]{1,10}(?:字|簽)第[0-9０-９]+號/) || [""])[0];
+  const docDate = fields.docDate
+    || (norm.match(/中華民國\s*[0-9０-９一二三四五六七八九十]{1,3}\s*年\s*[0-9０-９一二三四五六七八九十]{1,3}\s*月\s*[0-9０-９一二三四五六七八九十]{1,3}\s*日?/) || [""])[0];
+
+  // Doc-type is normally read off the trailing 函/簽/公告/… marker on the
+  // letterhead line — but that single glyph is exactly what OCR most often
+  // misreads (seen turning into "范", "數", "銷"...). 發文字號 is far more
+  // reliable: it always literally spells out "字第" or "簽第" right next to
+  // a run of digits, a context OCR handles consistently, so check that
+  // first and only fall back to the letterhead/body-text heuristics when
+  // the number didn't come through.
+  // 公文程式條例 recognizes 令/呈/咨/函/公告 as the five formal types, plus a
+  // long tail of "其他公文" sub-types (書函、開會通知單、公務電話紀錄、手令、
+  // 簽…). Of that tail, only 簽/書函/開會通知單 actually turn up in this
+  // office's real correspondence, so those three get their own docType value
+  // — everything else in the tail (手令、箋函…) still falls into the generic
+  // "其他公文" bucket. 簽 is checked first and via multiple signals because
+  // it's also the one signal classifyDirection() needs to recognize an
+  // internal memo (see IS_INTERNAL_MEMO_RE below).
+  const docType =
+    IS_INTERNAL_MEMO_RE.test(docNumber) || headerLines.some(l => /簽$/.test(l)) || /^擬辦/m.test(norm) ? "簽" :
+    headerLines.some(l => /開會通知單$/.test(l)) ? "開會通知單" :
+    headerLines.some(l => /書函$/.test(l)) ? "書函" :
+    headerLines.some(l => /(手令|手諭|箋函)$/.test(l)) ? "其他公文" :
+    headerLines.some(l => /咨$/.test(l)) ? "咨" :
+    headerLines.some(l => /呈$/.test(l)) ? "呈" :
+    headerLines.some(l => /令$/.test(l)) ? "令" :
+    headerLines.some(l => /公告$/.test(l)) ? "公告" :
+    "函";
+
+  // Prefer the bbox-detected letterhead line when we have one (new OCR
+  // runs); fall back to the old text-only heuristic for records OCR'd
+  // before this line-height data was captured.
+  const agencyLine = extractAgencyFromTitleLine(titleLineRaw) || (
+    headerLines
+      .filter(l => !FIELD_DEFS.some(([, re]) => re.test(l)) && !TERMINAL_RE.test(l))
+      .map(l => l.replace(/\s*(令|呈|咨|函|簽|書函|公告|開會通知單)\s*$/, "").trim())
+      .find(l => AGENCY_SUFFIX_RE.test(l) && l.length >= 3 && l.length <= 20)
+  ) || "";
+
+  // 密等及解密條件或保密期限 is filled in as one line, e.g. "密，草案核備
+  // 後解除" — the level (密/機密/極機密/絕對機密) and the declassify
+  // condition are two distinct pieces of information, split on the comma
+  // that separates them in the source document.
+  const securityParts = (fields.security || "").split(/[,，]/).map(s => s.trim());
+  const security = securityParts[0] || "";
+  const declassifyCondition = securityParts.slice(1).join(",").trim();
+
+  // If the cover letter only pointed at "如說明" and never named the
+  // attachment, the attached document's own title (found the same way as
+  // the letterhead — the visually oversized line near the top of whichever
+  // later page it starts on) is a much more useful answer than the literal
+  // placeholder text.
+  let attachment = (fields.attachment || "").trim();
+  if ((!attachment || ATTACHMENT_PLACEHOLDER_RE.test(attachment.replace(/\s+/g, ""))) && Array.isArray(pageTitleLines)) {
+    for (const raw of pageTitleLines.slice(1)) {
+      const candidate = cleanOcrText(raw || "").replace(/\n/g, "").trim();
+      if (candidate.length >= 4 && candidate.length <= 60) { attachment = candidate; break; }
+    }
+  }
+
+  return {
+    docType, agency: agencyLine, docNumber, docDate,
+    speed: fields.speed || "", security, declassifyCondition,
+    attachment, recipient: fields.recipient || "",
+    subject: fields.subject || "",
+    explanation: fields.explanation || "", proposal: fields.proposal || "",
+  };
+}
+
+// --- pipeline -------------------------------------------------------------
+async function runOcrPipeline(record, fileBlob){
+  try {
+    const buf = await fileBlob.arrayBuffer();
+    const canvases = await renderPdfPages(buf);
+    record.pageCount = canvases.length;
+    const w = await getWorker();
+    let fullText = "";
+    let titleLineRaw = "";
+    // The same "line-height stands out from the page's body text" signal
+    // that finds the letterhead on page 1 also finds an attached
+    // document's own title heading on whichever later page it starts on —
+    // useful because the cover letter's 附件 line is very often just
+    // "如說明" with the real title never spelled out there at all.
+    const pageTitleLines = [];
+    for (let i = 0; i < canvases.length; i++) {
+      record.statusDetail = `辨識第 ${i + 1}/${canvases.length} 頁`;
+      renderTable();
+      const { data } = await w.recognize(canvases[i]);
+      let pageTitle = "";
+      if (data.lines && data.lines.length) {
+        const idx = findTitleLineIndex(data.lines, canvases[i].height);
+        if (idx >= 0) pageTitle = data.lines[idx].text;
+      }
+      if (i === 0) titleLineRaw = pageTitle;
+      pageTitleLines.push(pageTitle);
+      if (i > 0) fullText += `\n${PAGE_BREAK}\n`;
+      fullText += data.text + "\n";
+    }
+    record.titleLineRaw = titleLineRaw;
+    record.pageTitleLines = pageTitleLines;
+    record.ocrTextRaw = fullText.trim();
+    record.ocrText = cleanOcrText(fullText).split(PAGE_BREAK).join("\n── 分頁 ──\n");
+    record.meta = extractMetadata(record.ocrTextRaw, record.titleLineRaw, record.pageTitleLines);
+    record.metaEdited = false; // an explicit re-OCR intentionally starts over from scratch
+    record.status = "done";
+    record.statusDetail = "";
+  } catch (err) {
+    console.error(err);
+    record.status = "error";
+    record.statusDetail = String(err && err.message ? err.message : err);
+  }
+  await dbPut(record);
+  renderTable();
+}
+
+async function processFile(file){
+  const id = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + "-" + Math.random());
+  const record = {
+    id, filename: file.name, uploadedAt: new Date().toISOString(),
+    fileBlob: file, status: "processing", statusDetail: "準備中…",
+    pageCount: 0, ocrText: "", meta: {},
+  };
+  records.unshift(record);
+  await dbPut(record);
+  renderTable();
+  await runOcrPipeline(record, file);
+}
+
+// Re-runs OCR on a document already in the list, using the original PDF
+// that's kept in the record — so a metadata-extraction improvement can be
+// applied to documents already uploaded without asking the user to find
+// and re-drag the original files back in.
+async function reprocessRecord(record){
+  record.status = "processing";
+  record.statusDetail = "準備中…";
+  renderTable();
+  await runOcrPipeline(record, record.fileBlob);
+}
+
+function escapeHtml(s){
+  return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+// 發文日期 comes out of OCR as free text like "中華民國115年3月28日";
+// render it as the compact ROC-calendar YYY/MM/DD form the list uses.
+function toHalfWidthDigits(s){
+  return (s || "").replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+}
+function formatRocDate(raw){
+  if (!raw) return "";
+  const m = toHalfWidthDigits(raw).match(/(\d{1,3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);
+  if (!m) return raw;
+  return `${m[1].padStart(3, "0")}/${m[2].padStart(2, "0")}/${m[3].padStart(2, "0")}`;
+}
+// Same parse as formatRocDate, but as a real Date (ROC year + 1911) so the
+// 發文日期 filter can compare against the Gregorian-calendar <input type=date>.
+function parseRocDateToDate(raw){
+  if (!raw) return null;
+  const m = toHalfWidthDigits(raw).match(/(\d{1,3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);
+  if (!m) return null;
+  const d = new Date(parseInt(m[1], 10) + 1911, parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// --- filters (關鍵字 / 發文者 / 收文者 / 日期區間) --------------------------
+const selectedAgencies = new Set();
+const selectedRecipients = new Set();
+
+// --- 日期欄位排序（近到遠 / 遠到近） ----------------------------------------
+// null = 維持預設順序（上傳時間新到舊）；"desc" = 日期近到遠；"asc" = 日期遠到近。
+// 沒有可解析日期的紀錄一律排在最後，不論排序方向。
+let dateSortDir = null;
+function applyDateSort(list){
+  if (!dateSortDir) return list;
+  const withDate = [];
+  const withoutDate = [];
+  for (const r of list) {
+    const d = parseRocDateToDate(r.meta.docDate);
+    if (d) withDate.push([r, d]); else withoutDate.push(r);
+  }
+  withDate.sort((a, b) => dateSortDir === "desc" ? b[1] - a[1] : a[1] - b[1]);
+  return withDate.map(([r]) => r).concat(withoutDate);
+}
+
+function matchesFilter(r, q, agencySet, recipientSet, dateFrom, dateTo){
+  if (agencySet.size && !(r.meta.agency && agencySet.has(r.meta.agency))) return false;
+  if (recipientSet.size && !(r.meta.recipient && recipientSet.has(r.meta.recipient))) return false;
+  if (dateFrom || dateTo) {
+    const d = parseRocDateToDate(r.meta.docDate);
+    if (!d) return false;
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+  }
+  if (!q) return true;
+  const hay = [r.filename, r.meta.docNumber, r.meta.docDate, r.meta.subject, r.meta.agency, r.ocrText]
+    .join(" ").toLowerCase();
+  return hay.includes(q.toLowerCase());
+}
+
+function getActiveFilters(){
+  const q = document.getElementById("searchBox").value.trim();
+  const fromVal = document.getElementById("dateFromInput").value;
+  const toVal = document.getElementById("dateToInput").value;
+  const dateFrom = fromVal ? new Date(fromVal + "T00:00:00") : null;
+  const dateTo = toVal ? new Date(toVal + "T23:59:59") : null;
+  return { q, dateFrom, dateTo };
+}
+
+function populateMultiSelect(panelId, btnId, field, selectedSet, labelBase){
+  const panel = document.getElementById(panelId);
+  const values = Array.from(new Set(
+    records.filter(r => r.status === "done" && r.meta[field]).map(r => r.meta[field].trim())
+  )).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+
+  // keep selections that no longer exist in the data from silently vanishing from the count
+  panel.innerHTML = values.length
+    ? `<div class="ms-actions"><button type="button" data-ms-all="${field}">全選</button><button type="button" data-ms-clear="${field}">清除</button></div>`
+      + values.map(v => `
+        <label><input type="checkbox" data-ms-field="${field}" value="${escapeHtml(v)}" ${selectedSet.has(v) ? "checked" : ""}> ${escapeHtml(v)}</label>
+      `).join("")
+    : `<div class="empty-hint">目前沒有可篩選的選項</div>`;
+
+  const btn = document.getElementById(btnId);
+  btn.textContent = selectedSet.size ? `${labelBase}（已選 ${selectedSet.size}）` : labelBase;
+  btn.classList.toggle("has-selection", selectedSet.size > 0);
+}
+
+// --- 表格勾選 / bulk action -------------------------------------------------
+const selectedIds = new Set();
+
+// The header checkbox reflects only the currently visible (filtered) rows —
+// selecting "all" while a filter is active shouldn't silently also select
+// rows the user can't currently see.
+function updateBulkActionBar(visibleIds){
+  const selectAllCb = document.getElementById("selectAllCheckbox");
+  const visibleSelectedCount = [...visibleIds].filter(id => selectedIds.has(id)).length;
+  selectAllCb.checked = visibleIds.size > 0 && visibleSelectedCount === visibleIds.size;
+  selectAllCb.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.size;
+
+  const hasSelection = selectedIds.size > 0;
+  document.getElementById("bulkActionBar").classList.toggle("slot-hidden", !hasSelection);
+  document.getElementById("filtersRow").classList.toggle("slot-hidden", hasSelection);
+  document.getElementById("bulkCount").textContent = `已選取 ${selectedIds.size} 筆`;
+}
+
+function renderTable(){
+  const tbody = document.getElementById("tbody");
+  const { q, dateFrom, dateTo } = getActiveFilters();
+  const visible = applyDateSort(records.filter(r => matchesFilter(r, q, selectedAgencies, selectedRecipients, dateFrom, dateTo)));
+  populateMultiSelect("agencyFilterPanel", "agencyFilterBtn", "agency", selectedAgencies, "篩選發文者");
+  populateMultiSelect("recipientFilterPanel", "recipientFilterBtn", "recipient", selectedRecipients, "篩選收文者");
+
+  // A record can leave the list entirely (deleted) — drop it from the
+  // selection too, or a stale id would inflate the bulk-action count forever.
+  const visibleIds = new Set(visible.map(r => r.id));
+  const liveIds = new Set(records.map(r => r.id));
+  for (const id of selectedIds) if (!liveIds.has(id)) selectedIds.delete(id);
+
+  const anyFilterActive = q || selectedAgencies.size || selectedRecipients.size || dateFrom || dateTo;
+  document.getElementById("totalCount").textContent = records.length;
+  document.getElementById("filterCount").textContent =
+    anyFilterActive ? `符合 ${visible.length} / ${records.length} 筆` : "";
+  document.getElementById("emptyState").style.display = records.length === 0 ? "block" : "none";
+  document.getElementById("docTable").style.display = records.length === 0 ? "none" : "table";
+
+  updateBulkActionBar(visibleIds);
+
+  if (records.length > 0 && visible.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">沒有符合篩選條件的文件</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = visible.map(r => {
+    const isDone = r.status === "done";
+    let tagsHtml;
+    if (isDone) {
+      const dir = classifyDirection(r.meta);
+      tagsHtml = `<span class="chip tone-${dir}">${escapeHtml(DIRECTION_LABEL[dir])}</span>`
+        + (r.meta.docType ? `<span class="chip tone-unknown">${escapeHtml(r.meta.docType)}</span>` : "")
+        + (r.metaEdited ? `<span class="muted" style="font-size:.72rem">內容已手動校正</span>` : "");
+    } else if (r.status === "error") {
+      tagsHtml = `<span class="chip tone-error">辨識失敗</span>`;
+    } else {
+      tagsHtml = `<span class="chip tone-processing">${escapeHtml(r.statusDetail || "處理中")}</span>`;
+    }
+    const subjectText = isDone
+      ? (escapeHtml(r.meta.subject) || '<span class="muted">—</span>')
+      : `<span class="muted">${escapeHtml(r.filename)}</span>`;
+    return `
+    <tr data-id="${r.id}" class="${selectedIds.has(r.id) ? "row-selected" : ""}">
+      <td class="checkbox-cell" data-label="選取"><input type="checkbox" class="row-checkbox" data-select-id="${r.id}" ${selectedIds.has(r.id) ? "checked" : ""}></td>
+      <td data-label="主旨" class="subtitle-cell">
+        <div class="clamp">${subjectText}</div>
+        <div class="row-tags">${tagsHtml}</div>
+      </td>
+      <td data-label="發文者">${escapeHtml(r.meta.agency) || '<span class="muted">—</span>'}</td>
+      <td data-label="收文者">${escapeHtml(r.meta.recipient) || '<span class="muted">—</span>'}</td>
+      <td data-label="日期">${escapeHtml(formatRocDate(r.meta.docDate)) || '<span class="muted">—</span>'}</td>
+      <td data-label="密等">${escapeHtml(r.meta.security) || '<span class="muted">—</span>'}</td>
+      <td data-label="操作"><div class="actions">
+        <button class="act" data-action="view" ${!isDone ? "disabled" : ""}>詳細內容</button>
+        <span class="icon-actions">
+          <button class="icon-btn danger" data-action="delete" title="刪除" aria-label="刪除">
+            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6H16M8 6V4.5C8 4 8.4 3.5 9 3.5H11C11.6 3.5 12 4 12 4.5V6M14.5 6L14 16C14 16.6 13.5 17 13 17H7C6.5 17 6 16.6 6 16L5.5 6H14.5Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </span>
+      </div></td>
+    </tr>
+  `;
+  }).join("");
+}
+
+function triggerDownload(record){
+  const url = URL.createObjectURL(record.fileBlob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = record.filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// Every extracted field is manually correctable — OCR occasionally gets a
+// character wrong even after all the extraction heuristics, and re-running
+// OCR won't fix a source misread, so a direct edit is the only way out.
+const DETAIL_EDIT_FIELD_MAP = [
+  ["detailEditDocType", "docType"],
+  ["detailEditAgency", "agency"],
+  ["detailEditRecipient", "recipient"],
+  ["detailEditDocNumber", "docNumber"],
+  ["detailEditDocDate", "docDate"],
+  ["detailEditSpeed", "speed"],
+  ["detailEditSecurity", "security"],
+  ["detailEditDeclassify", "declassifyCondition"],
+  ["detailEditSubject", "subject"],
+  ["detailEditExplanation", "explanation"],
+  ["detailEditProposal", "proposal"],
+  ["detailEditAttachment", "attachment"],
+];
+
+let detailPreviewUrl = null;
+let detailCurrentRecord = null;
+let detailEditing = false;
+
+function renderDetailView(record){
+  document.getElementById("detailModalSub").textContent =
+    `共 ${record.pageCount} 頁 ・ 上傳於 ${new Date(record.uploadedAt).toLocaleString("zh-TW")}`;
+  const fields = [
+    ["文別", record.meta.docType],
+    ["發文者", record.meta.agency],
+    ["受文者", record.meta.recipient],
+    ["發文字號", record.meta.docNumber],
+    ["發文日期", record.meta.docDate],
+    ["速別", record.meta.speed],
+    ["密等", record.meta.security],
+    ["解密條件", record.meta.declassifyCondition],
+    ["主旨/案由", record.meta.subject],
+    ["說明", record.meta.explanation],
+    ["擬辦", record.meta.proposal],
+    ["附件", record.meta.attachment],
+  ].filter(([, v]) => v);
+  document.getElementById("detailMetaGrid").innerHTML = fields.map(([k, v]) =>
+    `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("");
+  document.getElementById("detailFulltext").textContent = record.ocrText || "（無內容）";
+}
+
+function enterDetailEditMode(record){
+  detailEditing = true;
+  DETAIL_EDIT_FIELD_MAP.forEach(([elId, metaKey]) => {
+    document.getElementById(elId).value = record.meta[metaKey] || "";
+  });
+  document.getElementById("detailViewPane").hidden = true;
+  document.getElementById("detailEditPane").hidden = false;
+  document.getElementById("detailEditToggleBtn").textContent = "儲存內容";
+}
+
+async function saveDetailEditMode(record){
+  DETAIL_EDIT_FIELD_MAP.forEach(([elId, metaKey]) => {
+    record.meta[metaKey] = document.getElementById(elId).value.trim();
+  });
+  // Marks this record so the metadata-reparse-on-load step (which
+  // re-derives meta from the raw OCR text whenever the extraction rules
+  // change) doesn't silently overwrite a manual correction — that reparse
+  // only touches records the user hasn't hand-edited.
+  record.metaEdited = true;
+  await dbPut(record);
+  detailEditing = false;
+  document.getElementById("detailViewPane").hidden = false;
+  document.getElementById("detailEditPane").hidden = true;
+  document.getElementById("detailEditToggleBtn").textContent = "校正內容";
+  renderDetailView(record);
+  renderTable();
+}
+
+function openDetailModal(record){
+  detailCurrentRecord = record;
+  detailEditing = false;
+  document.getElementById("detailModalTitle").textContent = record.filename;
+  renderDetailView(record);
+  document.getElementById("detailViewPane").hidden = false;
+  document.getElementById("detailEditPane").hidden = true;
+  document.getElementById("detailEditToggleBtn").textContent = "校正內容";
+
+  if (detailPreviewUrl) URL.revokeObjectURL(detailPreviewUrl);
+  detailPreviewUrl = URL.createObjectURL(record.fileBlob);
+  document.getElementById("detailPdfFrame").src = detailPreviewUrl;
+
+  document.getElementById("detailOverlay").classList.add("show");
+}
+
+function closeDetailModal(){
+  document.getElementById("detailOverlay").classList.remove("show");
+  document.getElementById("detailPdfFrame").src = "about:blank";
+  if (detailPreviewUrl) { URL.revokeObjectURL(detailPreviewUrl); detailPreviewUrl = null; }
+  detailEditing = false;
+  detailCurrentRecord = null;
+}
+
+document.getElementById("detailEditToggleBtn").addEventListener("click", () => {
+  if (!detailCurrentRecord) return;
+  if (detailEditing) saveDetailEditMode(detailCurrentRecord);
+  else enterDetailEditMode(detailCurrentRecord);
+});
+document.getElementById("detailDownloadBtn").addEventListener("click", () => {
+  if (detailCurrentRecord) triggerDownload(detailCurrentRecord);
+});
+document.getElementById("detailCloseBtn").addEventListener("click", closeDetailModal);
+document.getElementById("detailOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "detailOverlay") closeDetailModal();
+});
+
+document.getElementById("tbody").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const tr = e.target.closest("tr");
+  const id = tr.getAttribute("data-id");
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  const action = btn.getAttribute("data-action");
+  if (action === "view") openDetailModal(record);
+  if (action === "delete") {
+    if (confirm(`確定要刪除「${record.filename}」的辨識紀錄嗎？（不會刪除您電腦上的原始檔案）`)) {
+      records = records.filter(r => r.id !== id);
+      selectedIds.delete(id);
+      dbDelete(id);
+      renderTable();
+    }
+  }
+});
+
+document.getElementById("tbody").addEventListener("change", (e) => {
+  const cb = e.target.closest(".row-checkbox");
+  if (!cb) return;
+  const id = cb.getAttribute("data-select-id");
+  if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+  renderTable();
+});
+
+document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
+  const { q, dateFrom, dateTo } = getActiveFilters();
+  const visible = records.filter(r => matchesFilter(r, q, selectedAgencies, selectedRecipients, dateFrom, dateTo));
+  if (e.target.checked) visible.forEach(r => selectedIds.add(r.id));
+  else visible.forEach(r => selectedIds.delete(r.id));
+  renderTable();
+});
+
+document.getElementById("bulkClearBtn").addEventListener("click", () => {
+  selectedIds.clear();
+  renderTable();
+});
+
+document.getElementById("bulkDeleteBtn").addEventListener("click", async () => {
+  const targets = records.filter(r => selectedIds.has(r.id));
+  if (!targets.length) return;
+  if (!confirm(`確定要刪除選取的 ${targets.length} 筆文件的辨識紀錄嗎？（不會刪除您電腦上的原始檔案）`)) return;
+  const idSet = new Set(targets.map(r => r.id));
+  records = records.filter(r => !idSet.has(r.id));
+  await Promise.all(targets.map(r => dbDelete(r.id)));
+  selectedIds.clear();
+  renderTable();
+});
+
+// 主旨/發文字號/發文日期等欄位整理成一份 Markdown，方便帶著走或貼到別處
+// 引用；OCR 全文另外用程式碼區塊包起來，避免內容裡的 # 或 * 被誤判成格式語法。
+function recordToMarkdown(r){
+  const m = r.meta || {};
+  const lines = [`# ${m.subject || r.filename}`, ""];
+  const fields = [
+    ["檔案名稱", r.filename], ["文別", m.docType], ["發文者", m.agency], ["受文者", m.recipient],
+    ["發文字號", m.docNumber], ["發文日期", m.docDate], ["速別", m.speed], ["密等", m.security],
+    ["解密條件", m.declassifyCondition], ["附件", m.attachment],
+  ];
+  for (const [label, value] of fields) if (value) lines.push(`- **${label}**：${value}`);
+  if (m.explanation) lines.push("", "## 說明", "", m.explanation);
+  if (m.proposal) lines.push("", "## 擬辦", "", m.proposal);
+  if (r.ocrText) lines.push("", "## 全文 OCR 內容", "", "```", r.ocrText, "```");
+  return lines.join("\n");
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+document.getElementById("bulkDownloadMdBtn").addEventListener("click", async () => {
+  const targets = records.filter(r => selectedIds.has(r.id));
+  if (!targets.length) return;
+
+  // 一份公文一個 .md 檔；只選一筆就直接下載該檔，選多筆則先打包成 zip 再
+  // 下載，避免瀏覽器一次觸發多個下載被擋掉，也方便使用者整批帶走。
+  if (targets.length === 1) {
+    const blob = new Blob([recordToMarkdown(targets[0])], { type: "text/markdown;charset=utf-8" });
+    downloadBlob(blob, `${targets[0].filename.replace(/\.pdf$/i, "")}.md`);
+    return;
+  }
+
+  const btn = document.getElementById("bulkDownloadMdBtn");
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "打包中…";
+  try {
+    const zip = new JSZip();
+    const usedNames = new Set();
+    for (const r of targets) {
+      let base = r.filename.replace(/\.pdf$/i, "") || r.id;
+      let name = `${base}.md`;
+      let n = 2;
+      while (usedNames.has(name)) { name = `${base}_${n}.md`; n++; }
+      usedNames.add(name);
+      zip.file(name, recordToMarkdown(r));
+    }
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadBlob(zipBlob, `公文匯出_${stamp}_${targets.length}筆.zip`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+});
+
+document.getElementById("searchBox").addEventListener("input", renderTable);
+document.getElementById("dateFromInput").addEventListener("change", renderTable);
+document.getElementById("dateToInput").addEventListener("change", renderTable);
+
+document.getElementById("dateSortHeader").addEventListener("click", () => {
+  dateSortDir = dateSortDir === "desc" ? "asc" : "desc";
+  const header = document.getElementById("dateSortHeader");
+  const arrow = document.getElementById("dateSortArrow");
+  header.classList.add("sort-active");
+  arrow.querySelector(".sa-up").classList.toggle("active", dateSortDir === "asc");
+  arrow.querySelector(".sa-down").classList.toggle("active", dateSortDir === "desc");
+  renderTable();
+});
+
+function wireMultiSelect(wrapId, panelId, btnId, field, selectedSet){
+  const wrap = document.getElementById(wrapId);
+  const panel = document.getElementById(panelId);
+  const btn = document.getElementById(btnId);
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const willOpen = panel.hidden;
+    document.querySelectorAll(".multiselect-panel").forEach(p => { p.hidden = true; });
+    panel.hidden = !willOpen;
+  });
+  panel.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (e.target.matches(`input[data-ms-field="${field}"]`)) {
+      const v = e.target.value;
+      if (e.target.checked) selectedSet.add(v); else selectedSet.delete(v);
+      renderTable();
+    } else if (e.target.matches(`[data-ms-all="${field}"]`)) {
+      panel.querySelectorAll(`input[data-ms-field="${field}"]`).forEach(cb => { cb.checked = true; selectedSet.add(cb.value); });
+      renderTable();
+    } else if (e.target.matches(`[data-ms-clear="${field}"]`)) {
+      selectedSet.clear();
+      renderTable();
+    }
+  });
+  wrap.dataset.wired = "1";
+}
+wireMultiSelect("agencyFilterWrap", "agencyFilterPanel", "agencyFilterBtn", "agency", selectedAgencies);
+wireMultiSelect("recipientFilterWrap", "recipientFilterPanel", "recipientFilterBtn", "recipient", selectedRecipients);
+document.addEventListener("click", () => {
+  document.querySelectorAll(".multiselect-panel").forEach(p => { p.hidden = true; });
+});
+
+document.getElementById("clearFiltersBtn").addEventListener("click", () => {
+  document.getElementById("searchBox").value = "";
+  document.getElementById("dateFromInput").value = "";
+  document.getElementById("dateToInput").value = "";
+  selectedAgencies.clear();
+  selectedRecipients.clear();
+  renderTable();
+});
+
+document.getElementById("reocrAllBtn").addEventListener("click", () => {
+  const targets = records.filter(r => r.status !== "processing" && r.fileBlob);
+  if (!targets.length) { alert("目前沒有可以重新辨識的文件。"); return; }
+  const editedCount = targets.filter(r => r.metaEdited).length;
+  const warning = editedCount
+    ? `\n（其中 ${editedCount} 筆您手動編輯過的資料，重新辨識後手動修改的內容會被覆蓋。）` : "";
+  if (!confirm(`確定要重新辨識全部 ${targets.length} 筆文件嗎？會依序逐一處理，文件數量多時可能要花不少時間。${warning}`)) return;
+  targets.forEach(r => enqueueTask(() => reprocessRecord(r)));
+});
+
+// --- 匯入公文資料 dialog ----------------------------------------------------
+document.getElementById("openImportBtn").addEventListener("click", () => {
+  document.getElementById("importOverlay").classList.add("show");
+});
+document.getElementById("importCloseBtn").addEventListener("click", () => {
+  document.getElementById("importOverlay").classList.remove("show");
+});
+document.getElementById("importOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "importOverlay") document.getElementById("importOverlay").classList.remove("show");
+});
+
+// --- header scroll effect (hide subtitle, shrink title) --------------------
+const headerEl = document.querySelector("header");
+window.addEventListener("scroll", () => {
+  headerEl.classList.toggle("scrolled", window.scrollY > 8);
+}, { passive: true });
+
+// --- delete all data ---------------------------------------------------
+document.getElementById("deleteAllBtn").addEventListener("click", async () => {
+  if (records.length === 0) { alert("目前沒有資料可以刪除。"); return; }
+  const ok = confirm(
+    `確定要刪除全部 ${records.length} 筆文件的辨識紀錄嗎？此操作無法復原，包含所有手動編輯過的內容也會一併清空。\n` +
+    `（不會刪除您電腦上的原始 PDF 檔案，只清空這個瀏覽器裡的清單。）`
+  );
+  if (!ok) return;
+  await dbClear();
+  records = [];
+  selectedAgencies.clear();
+  selectedRecipients.clear();
+  selectedIds.clear();
+  renderTable();
+});
+
+// --- upload wiring ----------------------------------------------------------
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+
+// OCR is CPU/memory heavy and the Tesseract worker is a single shared
+// instance, so files are processed one at a time even when several are
+// dropped together — running them concurrently was racing worker setup
+// and stalling every job.
+const pendingQueue = [];
+let queueBusy = false;
+function enqueueTask(taskFn){
+  pendingQueue.push(taskFn);
+  runQueue();
+}
+async function runQueue(){
+  if (queueBusy) return;
+  queueBusy = true;
+  while (pendingQueue.length) {
+    const task = pendingQueue.shift();
+    await task();
+  }
+  queueBusy = false;
+  // All queued uploads/re-OCR jobs are done — if the import dialog is open,
+  // there's nothing left for the user to wait on, so close it for them.
+  const importOverlay = document.getElementById("importOverlay");
+  if (importOverlay.classList.contains("show")) importOverlay.classList.remove("show");
+}
+
+function handleFiles(fileList){
+  const files = Array.from(fileList).filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+  if (files.length === 0) { alert("請選擇 PDF 檔案"); return; }
+
+  // Block by filename — both against what's already in the list and
+  // against duplicates within this same drop/selection batch.
+  const seenNames = new Set(records.map(r => r.filename));
+  const accepted = [];
+  const skipped = [];
+  for (const f of files) {
+    if (seenNames.has(f.name)) {
+      skipped.push(f.name);
+    } else {
+      accepted.push(f);
+      seenNames.add(f.name);
+    }
+  }
+  if (skipped.length) {
+    alert(`以下檔案的檔名已存在於清單中，已略過，未重複上傳：\n${skipped.join("\n")}`);
+  }
+  accepted.forEach(f => enqueueTask(() => processFile(f)));
+}
+
+dropzone.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", (e) => { handleFiles(e.target.files); fileInput.value = ""; });
+["dragenter", "dragover"].forEach(evt =>
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add("drag"); }));
+["dragleave", "drop"].forEach(evt =>
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove("drag"); }));
+dropzone.addEventListener("drop", (e) => {
+  if (e.dataTransfer.files && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+
+// --- init ---------------------------------------------------------------
+(async function init(){
+  try {
+    records = await dbGetAll();
+    records.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+    // Metadata extraction rules improve over time; the raw OCR text is kept
+    // per record specifically so already-processed documents can be
+    // re-parsed with the latest rules on load, without re-running OCR.
+    const reparsed = [];
+    for (const r of records) {
+      if (r.status === "done" && r.ocrTextRaw && !r.metaEdited) {
+        const freshMeta = extractMetadata(r.ocrTextRaw, r.titleLineRaw, r.pageTitleLines);
+        if (JSON.stringify(freshMeta) !== JSON.stringify(r.meta)) {
+          r.meta = freshMeta;
+          reparsed.push(r);
+        }
+      }
+    }
+    if (reparsed.length) {
+      await Promise.all(reparsed.map(r => dbPut(r)));
+    }
+  } catch (e) { console.warn("IndexedDB unavailable", e); }
+  renderTable();
+})();
+</script>
+</body>
+</html>

@@ -419,9 +419,9 @@
         <div class="modal-sub">拖曳或選擇 PDF 檔案開始辨識，全部完成後再關閉這個視窗即可。</div>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" id="reocrAllBtn" type="button">全部重新辨識</button>
-        <button class="btn-secondary btn-danger" id="deleteAllBtn" type="button">刪除全部資料</button>
-        <button class="btn-primary" id="importCloseBtn" type="button">關閉</button>
+        <button class="icon-btn" id="importCloseBtn" type="button" title="關閉" aria-label="關閉">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
       </div>
     </div>
     <div id="dropzone">
@@ -562,16 +562,6 @@ async function dbDelete(id){
     tx.onerror = () => reject(tx.error);
   });
 }
-async function dbClear(){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).clear();
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
 let records = [];
 let worker = null;
 let workerReady = false;
@@ -914,17 +904,6 @@ async function processFile(file){
   await dbPut(record);
   renderTable();
   await runOcrPipeline(record, file);
-}
-
-// Re-runs OCR on a document already in the list, using the original PDF
-// that's kept in the record — so a metadata-extraction improvement can be
-// applied to documents already uploaded without asking the user to find
-// and re-drag the original files back in.
-async function reprocessRecord(record){
-  record.status = "processing";
-  record.statusDetail = "準備中…";
-  renderTable();
-  await runOcrPipeline(record, record.fileBlob);
 }
 
 function escapeHtml(s){
@@ -1390,16 +1369,6 @@ document.getElementById("clearFiltersBtn").addEventListener("click", () => {
   renderTable();
 });
 
-document.getElementById("reocrAllBtn").addEventListener("click", () => {
-  const targets = records.filter(r => r.status !== "processing" && r.fileBlob);
-  if (!targets.length) { alert("目前沒有可以重新辨識的文件。"); return; }
-  const editedCount = targets.filter(r => r.metaEdited).length;
-  const warning = editedCount
-    ? `\n（其中 ${editedCount} 筆您手動編輯過的資料，重新辨識後手動修改的內容會被覆蓋。）` : "";
-  if (!confirm(`確定要重新辨識全部 ${targets.length} 筆文件嗎？會依序逐一處理，文件數量多時可能要花不少時間。${warning}`)) return;
-  targets.forEach(r => enqueueTask(() => reprocessRecord(r)));
-});
-
 // --- 匯入公文資料 dialog ----------------------------------------------------
 document.getElementById("openImportBtn").addEventListener("click", () => {
   document.getElementById("importOverlay").classList.add("show");
@@ -1416,22 +1385,6 @@ const headerEl = document.querySelector("header");
 window.addEventListener("scroll", () => {
   headerEl.classList.toggle("scrolled", window.scrollY > 8);
 }, { passive: true });
-
-// --- delete all data ---------------------------------------------------
-document.getElementById("deleteAllBtn").addEventListener("click", async () => {
-  if (records.length === 0) { alert("目前沒有資料可以刪除。"); return; }
-  const ok = confirm(
-    `確定要刪除全部 ${records.length} 筆文件的辨識紀錄嗎？此操作無法復原，包含所有手動編輯過的內容也會一併清空。\n` +
-    `（不會刪除您電腦上的原始 PDF 檔案，只清空這個瀏覽器裡的清單。）`
-  );
-  if (!ok) return;
-  await dbClear();
-  records = [];
-  selectedAgencies.clear();
-  selectedRecipients.clear();
-  selectedIds.clear();
-  renderTable();
-});
 
 // --- upload wiring ----------------------------------------------------------
 const dropzone = document.getElementById("dropzone");

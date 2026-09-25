@@ -374,6 +374,7 @@
     </div>
     <div class="stats">
       <div><b id="totalCount">0</b> 筆文件</div>
+      <button class="btn-primary" id="exportMdBtn" type="button" title="匯出目前列表中的公文（含篩選結果）">匯出 Markdown 檔案</button>
       <button class="btn-primary" id="openImportBtn" type="button">匯入公文資料</button>
     </div>
   </header>
@@ -1334,19 +1335,15 @@ function downloadBlob(blob, filename){
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-document.getElementById("bulkDownloadMdBtn").addEventListener("click", async () => {
-  const targets = records.filter(r => selectedIds.has(r.id));
+// 一份公文一個 .md 檔；只有一筆就直接下載該檔，多筆則先打包成 zip 再下載，
+// 避免瀏覽器一次觸發多個下載被擋掉，也方便使用者整批帶走。
+async function exportMarkdown(targets, btn){
   if (!targets.length) return;
-
-  // 一份公文一個 .md 檔；只選一筆就直接下載該檔，選多筆則先打包成 zip 再
-  // 下載，避免瀏覽器一次觸發多個下載被擋掉，也方便使用者整批帶走。
   if (targets.length === 1) {
     const blob = new Blob([recordToMarkdown(targets[0])], { type: "text/markdown;charset=utf-8" });
     downloadBlob(blob, `${targets[0].filename.replace(/\.pdf$/i, "")}.md`);
     return;
   }
-
-  const btn = document.getElementById("bulkDownloadMdBtn");
   const originalLabel = btn.textContent;
   btn.disabled = true;
   btn.textContent = "打包中…";
@@ -1368,6 +1365,19 @@ document.getElementById("bulkDownloadMdBtn").addEventListener("click", async () 
     btn.disabled = false;
     btn.textContent = originalLabel;
   }
+}
+
+document.getElementById("bulkDownloadMdBtn").addEventListener("click", (e) => {
+  exportMarkdown(records.filter(r => selectedIds.has(r.id)), e.currentTarget);
+});
+
+// Header 匯出：匯出目前列表看到的公文（套用篩選、排序），只含已辨識完成的。
+document.getElementById("exportMdBtn").addEventListener("click", (e) => {
+  const { q, dateFrom, dateTo } = getActiveFilters();
+  const targets = applyDateSort(records.filter(r => matchesFilter(r, q, selectedAgencies, selectedRecipients, dateFrom, dateTo)))
+    .filter(r => r.status === "done");
+  if (!targets.length) { alert("目前列表沒有可匯出的公文。"); return; }
+  exportMarkdown(targets, e.currentTarget);
 });
 
 document.getElementById("searchBox").addEventListener("input", renderTable);

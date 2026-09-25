@@ -49,6 +49,7 @@
     --v-radius-lg:16px;
     --v-font-title:"Poppins","Noto Sans TC",sans-serif;
     --v-font-body:"Figtree","Noto Sans TC",sans-serif;
+    --filter-h:38px;
     --v-mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box;}
@@ -145,7 +146,7 @@
     border:1px solid var(--v-border); border-radius:var(--v-radius-sm); padding:8px 12px; cursor:pointer; white-space:nowrap;
     transition:border-color .1s, background .1s;
   }
-  .multiselect-btn{ display:inline-flex; align-items:center; gap:6px; }
+  .multiselect-btn{ display:inline-flex; align-items:center; gap:6px; height:var(--filter-h); }
   .multiselect-btn .chevron{ width:12px; height:12px; flex:none; transition:transform .15s; }
   .multiselect.open .multiselect-btn .chevron{ transform:rotate(180deg); }
   .multiselect-btn:hover{ border-color:var(--v-primary); background:var(--v-primary-highlight); }
@@ -175,6 +176,7 @@
 
   .date-range{ display:flex; align-items:center; gap:6px; font-size:.8rem; color:var(--v-text-secondary); flex-wrap:wrap; }
   .date-range input[type=date]{
+    height:var(--filter-h);
     padding:7px 9px; border:1px solid var(--v-border); background:var(--v-bg); color:var(--v-text);
     border-radius:var(--v-radius-sm); font-family:inherit; font-size:.82rem;
   }
@@ -233,7 +235,7 @@
   .filter-slot{ display:grid; }
   .filter-slot > *{ grid-area:1 / 1; }
   .filters-row, .bulk-action-bar{
-    display:flex; gap:8px; align-items:center; flex-wrap:wrap; min-height:37px;
+    display:flex; gap:8px; align-items:center; flex-wrap:wrap; min-height:var(--filter-h);
     opacity:1; transform:translateY(0); visibility:visible;
     transition:opacity .16s ease, transform .16s ease;
   }

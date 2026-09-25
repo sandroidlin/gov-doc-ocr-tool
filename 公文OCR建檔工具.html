@@ -375,7 +375,6 @@
     <div class="stats">
       <div><b id="totalCount">0</b> 筆文件</div>
       <button class="btn-primary" id="openImportBtn" type="button">匯入公文資料</button>
-      <button class="btn-primary" id="exportMdBtn" type="button" title="匯出全部已辨識的公文（不受篩選影響）">匯出 Markdown 檔案</button>
     </div>
   </header>
 
@@ -1368,13 +1367,6 @@ async function exportMarkdown(targets, btn){
 
 document.getElementById("bulkDownloadMdBtn").addEventListener("click", (e) => {
   exportMarkdown(records.filter(r => selectedIds.has(r.id)), e.currentTarget);
-});
-
-// Header 匯出：一律匯出全部已辨識完成的公文，不受目前篩選影響。
-document.getElementById("exportMdBtn").addEventListener("click", (e) => {
-  const targets = records.filter(r => r.status === "done");
-  if (!targets.length) { alert("目前沒有可匯出的公文。"); return; }
-  exportMarkdown(targets, e.currentTarget);
 });
 
 document.getElementById("searchBox").addEventListener("input", renderTable);

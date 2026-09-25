@@ -374,8 +374,8 @@
     </div>
     <div class="stats">
       <div><b id="totalCount">0</b> 筆文件</div>
-      <button class="btn-primary" id="exportMdBtn" type="button" title="匯出目前列表中的公文（含篩選結果）">匯出 Markdown 檔案</button>
       <button class="btn-primary" id="openImportBtn" type="button">匯入公文資料</button>
+      <button class="btn-primary" id="exportMdBtn" type="button" title="匯出全部已辨識的公文（不受篩選影響）">匯出 Markdown 檔案</button>
     </div>
   </header>
 
@@ -396,10 +396,9 @@
           <div class="multiselect-panel" id="recipientFilterPanel" hidden></div>
         </div>
         <div class="date-range">
-          <label>日期區間（西元）</label>
-          <input type="date" id="dateFromInput">
+          <input type="date" id="dateFromInput" aria-label="起始日期（西元）">
           <span>～</span>
-          <input type="date" id="dateToInput">
+          <input type="date" id="dateToInput" aria-label="結束日期（西元）">
         </div>
         <button class="link-btn" id="clearFiltersBtn" type="button">清除篩選</button>
       </div>
@@ -1371,12 +1370,10 @@ document.getElementById("bulkDownloadMdBtn").addEventListener("click", (e) => {
   exportMarkdown(records.filter(r => selectedIds.has(r.id)), e.currentTarget);
 });
 
-// Header 匯出：匯出目前列表看到的公文（套用篩選、排序），只含已辨識完成的。
+// Header 匯出：一律匯出全部已辨識完成的公文，不受目前篩選影響。
 document.getElementById("exportMdBtn").addEventListener("click", (e) => {
-  const { q, dateFrom, dateTo } = getActiveFilters();
-  const targets = applyDateSort(records.filter(r => matchesFilter(r, q, selectedAgencies, selectedRecipients, dateFrom, dateTo)))
-    .filter(r => r.status === "done");
-  if (!targets.length) { alert("目前列表沒有可匯出的公文。"); return; }
+  const targets = records.filter(r => r.status === "done");
+  if (!targets.length) { alert("目前沒有可匯出的公文。"); return; }
   exportMarkdown(targets, e.currentTarget);
 });
 

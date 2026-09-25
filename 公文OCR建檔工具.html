@@ -107,6 +107,21 @@
     font-family:var(--v-mono);
   }
 
+  .link-btn{
+    font-family:inherit; font-size:.8rem; color:var(--v-link); background:none; border:none; padding:4px 2px;
+    cursor:pointer;
+  }
+  .link-btn:hover{ text-decoration:underline; }
+  .filter-summary{
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-height:24px;
+    font-size:.78rem; color:var(--v-text-secondary);
+  }
+  .filter-summary .fs-chip{
+    max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    background:var(--v-primary-selected); color:var(--v-primary-hover); font-weight:600;
+    padding:2px 9px; border-radius:12px; line-height:1.6;
+  }
+  .filter-summary .fs-count{ margin-left:auto; white-space:nowrap; }
   .count-pill{
     font-size:.78rem; color:var(--v-text-secondary); white-space:nowrap;
   }
@@ -130,6 +145,9 @@
     border:1px solid var(--v-border); border-radius:var(--v-radius-sm); padding:8px 12px; cursor:pointer; white-space:nowrap;
     transition:border-color .1s, background .1s;
   }
+  .multiselect-btn{ display:inline-flex; align-items:center; gap:6px; }
+  .multiselect-btn .chevron{ width:12px; height:12px; flex:none; transition:transform .15s; }
+  .multiselect.open .multiselect-btn .chevron{ transform:rotate(180deg); }
   .multiselect-btn:hover{ border-color:var(--v-primary); background:var(--v-primary-highlight); }
   .multiselect-btn.has-selection{ border-color:var(--v-primary); color:var(--v-primary); background:var(--v-primary-highlight); font-weight:600; }
   .multiselect-panel{
@@ -369,11 +387,11 @@
     <div class="filter-slot">
       <div class="filters-row" id="filtersRow">
         <div class="multiselect" id="agencyFilterWrap">
-          <button type="button" class="multiselect-btn" id="agencyFilterBtn">篩選發文者</button>
+          <button type="button" class="multiselect-btn" id="agencyFilterBtn"></button>
           <div class="multiselect-panel" id="agencyFilterPanel" hidden></div>
         </div>
         <div class="multiselect" id="recipientFilterWrap">
-          <button type="button" class="multiselect-btn" id="recipientFilterBtn">篩選收文者</button>
+          <button type="button" class="multiselect-btn" id="recipientFilterBtn"></button>
           <div class="multiselect-panel" id="recipientFilterPanel" hidden></div>
         </div>
         <div class="date-range">
@@ -382,8 +400,7 @@
           <span>～</span>
           <input type="date" id="dateToInput">
         </div>
-        <button class="act" id="clearFiltersBtn" type="button">清除篩選</button>
-        <span class="count-pill" id="filterCount"></span>
+        <button class="link-btn" id="clearFiltersBtn" type="button">清除篩選</button>
       </div>
 
       <div class="bulk-action-bar slot-hidden" id="bulkActionBar">
@@ -394,6 +411,8 @@
         <button class="act danger" id="bulkDeleteBtn" type="button">刪除選取項目</button>
       </div>
     </div>
+
+    <div class="filter-summary" id="filterSummary"></div>
   </div>
 
   <table id="docTable">
@@ -1009,7 +1028,8 @@ function populateMultiSelect(panelId, btnId, field, selectedSet, labelBase){
         : `<div class="empty-hint">沒有符合的單位</div>`);
 
   const btn = document.getElementById(btnId);
-  btn.textContent = selectedSet.size ? `${labelBase}（已選 ${selectedSet.size}）` : labelBase;
+  btn.innerHTML = `<span>${selectedSet.size ? `${labelBase}（已選 ${selectedSet.size}）` : labelBase}</span>`
+    + `<svg class="chevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   btn.classList.toggle("has-selection", selectedSet.size > 0);
 }
 
@@ -1031,6 +1051,25 @@ function updateBulkActionBar(visibleIds){
   document.getElementById("bulkCount").textContent = `已選取 ${selectedIds.size} 筆`;
 }
 
+// Always rendered (even with no filters) so the line has a stable height and
+// the table doesn't jump when a filter turns on; it says what the rows
+// below are actually a result of.
+function renderFilterSummary(q, dateFrom, dateTo, visibleCount){
+  const chips = [];
+  if (q) chips.push(`關鍵字：${q}`);
+  if (selectedAgencies.size) chips.push(`發文者：${[...selectedAgencies].join("、")}`);
+  if (selectedRecipients.size) chips.push(`收文者：${[...selectedRecipients].join("、")}`);
+  if (dateFrom || dateTo) {
+    const fmt = d => d.toLocaleDateString("sv-SE");
+    chips.push(`日期：${dateFrom ? fmt(dateFrom) : "不限"} ～ ${dateTo ? fmt(dateTo) : "不限"}`);
+  }
+  const el = document.getElementById("filterSummary");
+  el.innerHTML = (chips.length
+    ? `<span>目前篩選：</span>` + chips.map(c => `<span class="fs-chip" title="${escapeHtml(c)}">${escapeHtml(c)}</span>`).join("")
+      + `<span class="fs-count">符合 ${visibleCount} / ${records.length} 筆</span>`
+    : `<span>目前顯示：全部公文</span><span class="fs-count">共 ${records.length} 筆</span>`);
+}
+
 function renderTable(){
   const tbody = document.getElementById("tbody");
   const { q, dateFrom, dateTo } = getActiveFilters();
@@ -1044,10 +1083,8 @@ function renderTable(){
   const liveIds = new Set(records.map(r => r.id));
   for (const id of selectedIds) if (!liveIds.has(id)) selectedIds.delete(id);
 
-  const anyFilterActive = q || selectedAgencies.size || selectedRecipients.size || dateFrom || dateTo;
   document.getElementById("totalCount").textContent = records.length;
-  document.getElementById("filterCount").textContent =
-    anyFilterActive ? `符合 ${visible.length} / ${records.length} 筆` : "";
+  renderFilterSummary(q, dateFrom, dateTo, visible.length);
   document.getElementById("emptyState").style.display = records.length === 0 ? "block" : "none";
   document.getElementById("docTable").style.display = records.length === 0 ? "none" : "table";
 
@@ -1347,6 +1384,10 @@ document.getElementById("dateSortHeader").addEventListener("click", () => {
   renderTable();
 });
 
+function closeAllMultiSelects(){
+  document.querySelectorAll(".multiselect-panel").forEach(p => { p.hidden = true; });
+  document.querySelectorAll(".multiselect").forEach(w => w.classList.remove("open"));
+}
 function wireMultiSelect(wrapId, panelId, btnId, field, selectedSet){
   const wrap = document.getElementById(wrapId);
   const panel = document.getElementById(panelId);
@@ -1354,8 +1395,9 @@ function wireMultiSelect(wrapId, panelId, btnId, field, selectedSet){
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     const willOpen = panel.hidden;
-    document.querySelectorAll(".multiselect-panel").forEach(p => { p.hidden = true; });
+    closeAllMultiSelects();
     panel.hidden = !willOpen;
+    wrap.classList.toggle("open", willOpen);
     if (willOpen) { const si = panel.querySelector(".ms-search"); if (si) si.focus(); }
   });
   panel.addEventListener("input", (e) => {
@@ -1379,9 +1421,7 @@ function wireMultiSelect(wrapId, panelId, btnId, field, selectedSet){
 }
 wireMultiSelect("agencyFilterWrap", "agencyFilterPanel", "agencyFilterBtn", "agency", selectedAgencies);
 wireMultiSelect("recipientFilterWrap", "recipientFilterPanel", "recipientFilterBtn", "recipient", selectedRecipients);
-document.addEventListener("click", () => {
-  document.querySelectorAll(".multiselect-panel").forEach(p => { p.hidden = true; });
-});
+document.addEventListener("click", closeAllMultiSelects);
 
 document.getElementById("clearFiltersBtn").addEventListener("click", () => {
   document.getElementById("searchBox").value = "";

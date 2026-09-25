@@ -142,6 +142,12 @@
   }
   .multiselect-panel label:hover{ background:var(--v-bg-grey); }
   .multiselect-panel .empty-hint{ padding:8px 6px; font-size:.8rem; color:var(--v-text-secondary); }
+  .multiselect-panel .ms-search{
+    position:sticky; top:-8px; z-index:1; width:100%; margin:-8px 0 6px; padding:9px 10px;
+    border:none; border-bottom:1px solid var(--v-border-layout); background:var(--v-bg); color:var(--v-text);
+    font-family:inherit; font-size:.83rem; border-radius:var(--v-radius-sm) var(--v-radius-sm) 0 0;
+  }
+  .multiselect-panel .ms-search:focus{ outline:none; border-bottom-color:var(--v-primary); }
   .multiselect-panel .ms-actions{
     display:flex; justify-content:space-between; padding:4px 6px 8px; border-bottom:1px solid var(--v-border-layout); margin-bottom:6px;
   }
@@ -981,13 +987,26 @@ function populateMultiSelect(panelId, btnId, field, selectedSet, labelBase){
     records.filter(r => r.status === "done" && r.meta[field]).map(r => r.meta[field].trim())
   )).sort((a, b) => a.localeCompare(b, "zh-Hant"));
 
-  // keep selections that no longer exist in the data from silently vanishing from the count
-  panel.innerHTML = values.length
-    ? `<div class="ms-actions"><button type="button" data-ms-all="${field}">全選</button><button type="button" data-ms-clear="${field}">清除</button></div>`
-      + values.map(v => `
+  // The search box lives outside the re-rendered list so typing in it (and
+  // its focus) survives the table re-render every checkbox click triggers.
+  let search = panel.querySelector(".ms-search");
+  let list = panel.querySelector(".ms-list");
+  if (!search) {
+    panel.innerHTML = `<input type="text" class="ms-search" data-ms-search="${field}" placeholder="搜尋單位…" autocomplete="off"><div class="ms-list"></div>`;
+    search = panel.querySelector(".ms-search");
+    list = panel.querySelector(".ms-list");
+  }
+  const q = search.value.trim().toLowerCase();
+  const matched = q ? values.filter(v => v.toLowerCase().includes(q)) : values;
+
+  list.innerHTML = !values.length
+    ? `<div class="empty-hint">目前沒有可篩選的選項</div>`
+    : `<div class="ms-actions"><button type="button" data-ms-all="${field}">${q ? "全選符合項目" : "全選"}</button><button type="button" data-ms-clear="${field}">清除</button></div>`
+      + (matched.length
+        ? matched.map(v => `
         <label><input type="checkbox" data-ms-field="${field}" value="${escapeHtml(v)}" ${selectedSet.has(v) ? "checked" : ""}> ${escapeHtml(v)}</label>
       `).join("")
-    : `<div class="empty-hint">目前沒有可篩選的選項</div>`;
+        : `<div class="empty-hint">沒有符合的單位</div>`);
 
   const btn = document.getElementById(btnId);
   btn.textContent = selectedSet.size ? `${labelBase}（已選 ${selectedSet.size}）` : labelBase;
@@ -1337,6 +1356,10 @@ function wireMultiSelect(wrapId, panelId, btnId, field, selectedSet){
     const willOpen = panel.hidden;
     document.querySelectorAll(".multiselect-panel").forEach(p => { p.hidden = true; });
     panel.hidden = !willOpen;
+    if (willOpen) { const si = panel.querySelector(".ms-search"); if (si) si.focus(); }
+  });
+  panel.addEventListener("input", (e) => {
+    if (e.target.matches(`input[data-ms-search="${field}"]`)) renderTable();
   });
   panel.addEventListener("click", (e) => {
     e.stopPropagation();

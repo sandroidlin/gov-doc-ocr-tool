@@ -212,6 +212,7 @@
     display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:12px;
     font-size:.68rem; font-weight:600; white-space:nowrap; line-height:1.7;
   }
+  .chip .chip-icon{ width:11px; height:11px; flex:none; }
   .chip.tone-sent{ background:var(--v-primary-selected); color:var(--v-primary-hover); }
   .chip.tone-received{ background:var(--v-positive-selected); color:var(--v-positive); }
   .chip.tone-internal{ background:var(--v-indigo-selected); color:var(--v-indigo); }
@@ -274,6 +275,7 @@
     transition:border-color .1s, background .1s, color .1s;
   }
   button.act:hover{ border-color:var(--v-primary); color:var(--v-primary); background:var(--v-primary-highlight); }
+  button.act.saved{ border-color:var(--v-positive); color:var(--v-positive); background:var(--v-positive-selected); }
   button.act.danger:hover{ border-color:var(--v-negative); color:var(--v-negative); background:var(--v-negative-selected); }
   button.act:disabled{ opacity:.4; cursor:not-allowed; }
   button.act:disabled:hover{ border-color:var(--v-border); color:var(--v-text); background:var(--v-bg); }
@@ -326,7 +328,9 @@
     border-color:var(--v-primary); background:var(--v-primary-highlight);
     box-shadow:0 0 0 1px var(--v-primary);
   }
-  .ocr-mode-title{ display:block; font-weight:600; font-size:.88rem; margin-bottom:4px; }
+  .ocr-mode-title{ display:flex; align-items:center; gap:7px; font-weight:600; font-size:.88rem; margin-bottom:4px; }
+  .ocr-mode-icon{ width:16px; height:16px; flex:none; color:var(--v-text-secondary); }
+  .ocr-mode-option input:checked + .ocr-mode-card .ocr-mode-icon{ color:var(--v-primary); }
   .ocr-mode-desc{ display:block; font-size:.76rem; color:var(--v-text-secondary); line-height:1.5; }
 
   .gemini-key-row{
@@ -485,14 +489,20 @@
       <label class="ocr-mode-option">
         <input type="radio" name="ocrMode" value="local" checked>
         <span class="ocr-mode-card">
-          <span class="ocr-mode-title">🖥️ 瀏覽器地端辨識</span>
+          <span class="ocr-mode-title">
+            <svg class="ocr-mode-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2.5" y="3.5" width="15" height="10" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M7 17H13M10 13.5V17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            瀏覽器地端辨識
+          </span>
           <span class="ocr-mode-desc">完全離線，公文內容不會離開這台電腦。首次使用需下載語言模型。</span>
         </span>
       </label>
       <label class="ocr-mode-option">
         <input type="radio" name="ocrMode" value="gemini">
         <span class="ocr-mode-card">
-          <span class="ocr-mode-title">☁️ AI 雲端辨識（Gemini）</span>
+          <span class="ocr-mode-title">
+            <svg class="ocr-mode-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 15H14A3 3 0 0 0 14.5 9.06 4 4 0 0 0 6.7 7.2 3.2 3.2 0 0 0 6.5 15Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+            AI 雲端辨識（Gemini）
+          </span>
           <span class="ocr-mode-desc">辨識較準確，但 PDF 頁面影像與文字會送到 Google 的伺服器，需要你自己的 API Key。</span>
         </span>
       </label>
@@ -503,6 +513,7 @@
         <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 10S5 4 10 4s8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.4"/></svg>
       </button>
       <input type="text" id="geminiModelInput" value="gemini-2.0-flash" title="Gemini 模型名稱" class="gemini-model-input">
+      <button type="button" class="act" id="geminiSaveKeyBtn">儲存</button>
       <span class="gemini-key-hint">Key 只存在這台瀏覽器（localStorage），不會存進 PDF 或匯出的檔案。<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">去 Google AI Studio 申請</a></span>
     </div>
     <div id="dropzone">
@@ -681,6 +692,13 @@ function classifyDirection(meta){
   return "unknown";
 }
 const DIRECTION_LABEL = { sent: "發文", received: "收文", internal: "局內", unknown: "未分類" };
+
+// Same two icons as the import dialog's mode picker, reused here so the
+// table chip reads as "the same thing, smaller" rather than a different symbol.
+const OCR_METHOD_ICON = {
+  local: '<svg class="chip-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2.5" y="3.5" width="15" height="10" rx="1.2" stroke="currentColor" stroke-width="1.6"/><path d="M7 17H13M10 13.5V17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  gemini: '<svg class="chip-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 15H14A3 3 0 0 0 14.5 9.06 4 4 0 0 0 6.7 7.2 3.2 3.2 0 0 0 6.5 15Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+};
 
 async function getWorker(){
   if (workerReady) return worker;
@@ -1269,7 +1287,7 @@ function renderTable(){
       const dir = classifyDirection(r.meta);
       tagsHtml = `<span class="chip tone-${dir}">${escapeHtml(DIRECTION_LABEL[dir])}</span>`
         + (r.meta.docType ? `<span class="chip tone-unknown">${escapeHtml(r.meta.docType)}</span>` : "")
-        + `<span class="chip tone-${r.ocrMethod === "gemini" ? "gemini" : "local"}">${r.ocrMethod === "gemini" ? "☁️ Gemini" : "🖥️ 本機"}</span>`
+        + `<span class="chip tone-${r.ocrMethod === "gemini" ? "gemini" : "local"}">${OCR_METHOD_ICON[r.ocrMethod === "gemini" ? "gemini" : "local"]}${r.ocrMethod === "gemini" ? "Gemini" : "本機"}</span>`
         + (r.metaEdited ? `<span class="muted" style="font-size:.72rem">內容已手動校正</span>` : "");
     } else if (r.status === "error") {
       tagsHtml = `<span class="chip tone-error">辨識失敗</span>`;
@@ -1340,7 +1358,7 @@ function renderDetailView(record){
   document.getElementById("detailModalSub").textContent =
     `共 ${record.pageCount} 頁 ・ 上傳於 ${new Date(record.uploadedAt).toLocaleString("zh-TW")}`;
   const fields = [
-    ["辨識方式", record.ocrMethod === "gemini" ? "☁️ AI 雲端辨識（Gemini）" : "🖥️ 瀏覽器地端辨識"],
+    ["辨識方式", record.ocrMethod === "gemini" ? "AI 雲端辨識（Gemini）" : "瀏覽器地端辨識"],
     ["文別", record.meta.docType],
     ["發文者", record.meta.agency],
     ["受文者", record.meta.recipient],
@@ -1618,10 +1636,24 @@ function updateOcrModeUi(){
     : "支援多檔同時上傳・PDF 格式・辨識完全在本機瀏覽器內進行";
 }
 document.querySelectorAll('input[name="ocrMode"]').forEach(r => r.addEventListener("change", updateOcrModeUi));
-geminiApiKeyInput.addEventListener("change", () => setStoredGeminiKey(geminiApiKeyInput.value.trim()));
-geminiModelInput.addEventListener("change", () => setStoredGeminiModel(geminiModelInput.value.trim()));
 document.getElementById("geminiKeyToggleBtn").addEventListener("click", () => {
   geminiApiKeyInput.type = geminiApiKeyInput.type === "password" ? "text" : "password";
+});
+
+// 「儲存」是唯一真正寫進 localStorage 的地方 — 不綁 input/change 事件，
+// 這樣使用者按下去才看得到明確的「已儲存」回饋，不用猜打完字是不是就存了。
+const geminiSaveKeyBtn = document.getElementById("geminiSaveKeyBtn");
+let geminiSaveResetTimer = null;
+geminiSaveKeyBtn.addEventListener("click", () => {
+  setStoredGeminiKey(geminiApiKeyInput.value.trim());
+  setStoredGeminiModel(geminiModelInput.value.trim());
+  clearTimeout(geminiSaveResetTimer);
+  geminiSaveKeyBtn.textContent = "已儲存 ✓";
+  geminiSaveKeyBtn.classList.add("saved");
+  geminiSaveResetTimer = setTimeout(() => {
+    geminiSaveKeyBtn.textContent = "儲存";
+    geminiSaveKeyBtn.classList.remove("saved");
+  }, 1500);
 });
 
 document.getElementById("openImportBtn").addEventListener("click", () => {

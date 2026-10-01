@@ -514,7 +514,9 @@
         <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 10S5 4 10 4s8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.4"/></svg>
       </button>
       <select id="geminiModelSelect" title="Gemini 模型" class="gemini-model-input">
-        <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash（建議，推薦預設）</option>
+        <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash（最新，需求量大時可能回應較慢）</option>
+        <option value="gemini-3.7-flash">Gemini 3.7 Flash（備用，較穩定）</option>
+        <option value="gemini-3.6-flash">Gemini 3.6 Flash（備用，較穩定）</option>
         <option value="__custom__">自訂模型名稱…</option>
       </select>
       <input type="text" id="geminiModelCustomInput" placeholder="輸入模型名稱，例如 gemini-3-pro" class="gemini-model-input" hidden>

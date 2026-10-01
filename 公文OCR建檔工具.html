@@ -216,6 +216,8 @@
   .chip.tone-received{ background:var(--v-positive-selected); color:var(--v-positive); }
   .chip.tone-internal{ background:var(--v-indigo-selected); color:var(--v-indigo); }
   .chip.tone-unknown{ background:var(--v-bg-disabled); color:var(--v-text-secondary); }
+  .chip.tone-local{ background:var(--v-bg-disabled); color:var(--v-text-secondary); }
+  .chip.tone-gemini{ background:var(--v-indigo-selected); color:var(--v-indigo); }
   .chip.tone-processing{ background:var(--v-warning-selected); color:var(--v-warning-text); }
   .chip.tone-error{ background:var(--v-negative-selected); color:var(--v-negative); }
   .row-tags{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:5px; }
@@ -311,6 +313,35 @@
   }
   #importModal .edit-modal-header{ margin-bottom:18px; }
   #importModal #dropzone{ margin-bottom:12px; }
+
+  .ocr-mode-picker{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .ocr-mode-option{ cursor:pointer; }
+  .ocr-mode-option input{ position:absolute; opacity:0; width:0; height:0; }
+  .ocr-mode-card{
+    display:block; border:1.5px solid var(--v-border); border-radius:var(--v-radius-md); padding:12px 14px;
+    transition:border-color .1s, background .1s;
+  }
+  .ocr-mode-option:hover .ocr-mode-card{ border-color:var(--v-primary); }
+  .ocr-mode-option input:checked + .ocr-mode-card{
+    border-color:var(--v-primary); background:var(--v-primary-highlight);
+    box-shadow:0 0 0 1px var(--v-primary);
+  }
+  .ocr-mode-title{ display:block; font-weight:600; font-size:.88rem; margin-bottom:4px; }
+  .ocr-mode-desc{ display:block; font-size:.76rem; color:var(--v-text-secondary); line-height:1.5; }
+
+  .gemini-key-row{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px;
+    padding:10px 12px; background:var(--v-bg-grey); border:1px solid var(--v-border-layout); border-radius:var(--v-radius-sm);
+  }
+  .gemini-key-row[hidden]{ display:none; }
+  .gemini-key-row input[type=password], .gemini-key-row input[type=text]{
+    padding:7px 10px; border:1px solid var(--v-border); background:var(--v-bg); color:var(--v-text);
+    border-radius:var(--v-radius-sm); font-family:inherit; font-size:.82rem;
+  }
+  #geminiApiKeyInput{ flex:1; min-width:180px; }
+  .gemini-model-input{ width:160px; font-family:var(--v-mono); font-size:.76rem !important; }
+  .gemini-key-hint{ width:100%; font-size:.72rem; color:var(--v-text-secondary); line-height:1.5; }
+  .gemini-key-hint a{ color:var(--v-link); }
 
   #detailOverlay{
     position:fixed; inset:0; background:rgba(41,47,76,.55); display:none;
@@ -450,6 +481,30 @@
         </button>
       </div>
     </div>
+    <div class="ocr-mode-picker" id="ocrModePicker">
+      <label class="ocr-mode-option">
+        <input type="radio" name="ocrMode" value="local" checked>
+        <span class="ocr-mode-card">
+          <span class="ocr-mode-title">🖥️ 瀏覽器地端辨識</span>
+          <span class="ocr-mode-desc">完全離線，公文內容不會離開這台電腦。首次使用需下載語言模型。</span>
+        </span>
+      </label>
+      <label class="ocr-mode-option">
+        <input type="radio" name="ocrMode" value="gemini">
+        <span class="ocr-mode-card">
+          <span class="ocr-mode-title">☁️ AI 雲端辨識（Gemini）</span>
+          <span class="ocr-mode-desc">辨識較準確，但 PDF 頁面影像與文字會送到 Google 的伺服器，需要你自己的 API Key。</span>
+        </span>
+      </label>
+    </div>
+    <div class="gemini-key-row" id="geminiKeyRow" hidden>
+      <input type="password" id="geminiApiKeyInput" placeholder="貼上你的 Gemini API Key" autocomplete="off">
+      <button type="button" class="icon-btn" id="geminiKeyToggleBtn" title="顯示／隱藏">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 10S5 4 10 4s8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.4"/></svg>
+      </button>
+      <input type="text" id="geminiModelInput" value="gemini-2.0-flash" title="Gemini 模型名稱" class="gemini-model-input">
+      <span class="gemini-key-hint">Key 只存在這台瀏覽器（localStorage），不會存進 PDF 或匯出的檔案。<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">去 Google AI Studio 申請</a></span>
+    </div>
     <div id="dropzone">
       <div class="icon">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -459,7 +514,7 @@
         </svg>
       </div>
       <div class="main-line">將公文 PDF 拖曳到這裡，或點擊選擇檔案</div>
-      <p>支援多檔同時上傳・PDF 格式・辨識完全在本機瀏覽器內進行</p>
+      <p id="dropzoneHint">支援多檔同時上傳・PDF 格式・辨識完全在本機瀏覽器內進行</p>
       <input id="fileInput" type="file" accept="application/pdf" multiple>
     </div>
     <div id="engineStatus"></div>
@@ -908,6 +963,7 @@ async function runOcrPipeline(record, fileBlob){
     record.ocrText = cleanOcrText(fullText).split(PAGE_BREAK).join("\n── 分頁 ──\n");
     record.meta = extractMetadata(record.ocrTextRaw, record.titleLineRaw, record.pageTitleLines);
     record.metaEdited = false; // an explicit re-OCR intentionally starts over from scratch
+    record.ocrMethod = "local";
     record.status = "done";
     record.statusDetail = "";
   } catch (err) {
@@ -919,17 +975,127 @@ async function runOcrPipeline(record, fileBlob){
   renderTable();
 }
 
-async function processFile(file){
+// --- Gemini 雲端 OCR（選用）--------------------------------------------------
+// Unlike the local Tesseract path, Gemini is asked to return the structured
+// fields directly — it's much better at handling messy/rotated scans and
+// at understanding "this is a Taiwanese 公文" as a document type than a
+// regex pass over raw OCR text ever will be, so there's no separate
+// extractMetadata step here. The schema below mirrors the `meta` shape
+// used everywhere else so the rest of the app doesn't need to know which
+// pipeline produced a record.
+const GEMINI_FIELD_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    docType: { type: "STRING", description: "文別，只能是：令、呈、咨、函、公告、簽、書函、開會通知單、其他公文 其中之一" },
+    agency: { type: "STRING", description: "發文機關全銜" },
+    recipient: { type: "STRING", description: "受文者" },
+    docNumber: { type: "STRING", description: "發文字號" },
+    docDate: { type: "STRING", description: "發文日期，例如：中華民國115年3月28日" },
+    speed: { type: "STRING", description: "速別" },
+    security: { type: "STRING", description: "密等" },
+    declassifyCondition: { type: "STRING", description: "解密條件或保密期限" },
+    attachment: { type: "STRING", description: "附件名稱" },
+    subject: { type: "STRING", description: "主旨／案由" },
+    explanation: { type: "STRING", description: "說明" },
+    proposal: { type: "STRING", description: "擬辦" },
+    fullText: { type: "STRING", description: "每一頁的完整文字內容，依頁面順序串接，盡量逐字轉錄，用於全文搜尋" },
+  },
+  required: ["docType", "agency", "recipient", "docNumber", "docDate", "subject", "fullText"],
+};
+const GEMINI_PROMPT =
+  "你會看到一份台灣政府公文的每一頁掃描影像（依頁面順序）。請依照指定的 JSON schema 擷取公文欄位。" +
+  "文字一律用文件裡實際出現的繁體中文原文，查無該欄位就回傳空字串，不要自己編造內容。";
+
+function canvasToBase64Png(canvas){
+  return canvas.toDataURL("image/png").split(",")[1];
+}
+
+async function callGeminiOcr(canvases, apiKey, model){
+  const parts = [{ text: GEMINI_PROMPT }];
+  for (const canvas of canvases) {
+    parts.push({ inlineData: { mimeType: "image/png", data: canvasToBase64Png(canvas) } });
+  }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: GEMINI_FIELD_SCHEMA },
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Gemini API 錯誤（${res.status}）：${body.slice(0, 200) || res.statusText}`);
+  }
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Gemini 沒有回傳可用的內容，請確認 API Key 與模型名稱是否正確。");
+  return JSON.parse(text);
+}
+
+async function runGeminiPipeline(record, fileBlob, apiKey, model){
+  try {
+    const buf = await fileBlob.arrayBuffer();
+    const canvases = await renderPdfPages(buf);
+    record.pageCount = canvases.length;
+    record.statusDetail = "傳送到 Gemini 辨識中…";
+    renderTable();
+    const fields = await callGeminiOcr(canvases, apiKey, model);
+    const fullText = (fields.fullText || "").trim();
+    record.ocrTextRaw = fullText;
+    record.ocrText = fullText;
+    record.titleLineRaw = "";
+    record.pageTitleLines = [];
+    record.meta = {
+      docType: fields.docType || "", agency: fields.agency || "", docNumber: fields.docNumber || "",
+      docDate: fields.docDate || "", speed: fields.speed || "", security: fields.security || "",
+      declassifyCondition: fields.declassifyCondition || "", attachment: fields.attachment || "",
+      recipient: fields.recipient || "", subject: fields.subject || "",
+      explanation: fields.explanation || "", proposal: fields.proposal || "",
+    };
+    record.metaEdited = false;
+    record.ocrMethod = "gemini";
+    record.status = "done";
+    record.statusDetail = "";
+  } catch (err) {
+    console.error(err);
+    record.status = "error";
+    record.statusDetail = String(err && err.message ? err.message : err);
+  }
+  await dbPut(record);
+  renderTable();
+}
+
+// --- Gemini API key / model（存在這台瀏覽器的 localStorage，不隨檔案走）----
+function getStoredGeminiKey(){
+  try { return localStorage.getItem("govDocOcrGeminiKey") || ""; } catch (e) { return ""; }
+}
+function setStoredGeminiKey(v){
+  try {
+    if (v) localStorage.setItem("govDocOcrGeminiKey", v);
+    else localStorage.removeItem("govDocOcrGeminiKey");
+  } catch (e) {}
+}
+function getStoredGeminiModel(){
+  try { return localStorage.getItem("govDocOcrGeminiModel") || "gemini-2.0-flash"; } catch (e) { return "gemini-2.0-flash"; }
+}
+function setStoredGeminiModel(v){
+  try { localStorage.setItem("govDocOcrGeminiModel", v || "gemini-2.0-flash"); } catch (e) {}
+}
+
+async function processFile(file, mode, geminiApiKey, geminiModel){
   const id = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + "-" + Math.random());
   const record = {
     id, filename: file.name, uploadedAt: new Date().toISOString(),
     fileBlob: file, status: "processing", statusDetail: "準備中…",
-    pageCount: 0, ocrText: "", meta: {},
+    pageCount: 0, ocrText: "", meta: {}, ocrMethod: mode,
   };
   records.unshift(record);
   await dbPut(record);
   renderTable();
-  await runOcrPipeline(record, file);
+  if (mode === "gemini") await runGeminiPipeline(record, file, geminiApiKey, geminiModel);
+  else await runOcrPipeline(record, file);
 }
 
 function escapeHtml(s){
@@ -1103,6 +1269,7 @@ function renderTable(){
       const dir = classifyDirection(r.meta);
       tagsHtml = `<span class="chip tone-${dir}">${escapeHtml(DIRECTION_LABEL[dir])}</span>`
         + (r.meta.docType ? `<span class="chip tone-unknown">${escapeHtml(r.meta.docType)}</span>` : "")
+        + `<span class="chip tone-${r.ocrMethod === "gemini" ? "gemini" : "local"}">${r.ocrMethod === "gemini" ? "☁️ Gemini" : "🖥️ 本機"}</span>`
         + (r.metaEdited ? `<span class="muted" style="font-size:.72rem">內容已手動校正</span>` : "");
     } else if (r.status === "error") {
       tagsHtml = `<span class="chip tone-error">辨識失敗</span>`;
@@ -1173,6 +1340,7 @@ function renderDetailView(record){
   document.getElementById("detailModalSub").textContent =
     `共 ${record.pageCount} 頁 ・ 上傳於 ${new Date(record.uploadedAt).toLocaleString("zh-TW")}`;
   const fields = [
+    ["辨識方式", record.ocrMethod === "gemini" ? "☁️ AI 雲端辨識（Gemini）" : "🖥️ 瀏覽器地端辨識"],
     ["文別", record.meta.docType],
     ["發文者", record.meta.agency],
     ["受文者", record.meta.recipient],
@@ -1434,7 +1602,32 @@ document.getElementById("clearFiltersBtn").addEventListener("click", () => {
 });
 
 // --- 匯入公文資料 dialog ----------------------------------------------------
+const geminiKeyRow = document.getElementById("geminiKeyRow");
+const geminiApiKeyInput = document.getElementById("geminiApiKeyInput");
+const geminiModelInput = document.getElementById("geminiModelInput");
+const dropzoneHint = document.getElementById("dropzoneHint");
+
+function currentOcrMode(){
+  return document.querySelector('input[name="ocrMode"]:checked').value;
+}
+function updateOcrModeUi(){
+  const mode = currentOcrMode();
+  geminiKeyRow.hidden = mode !== "gemini";
+  dropzoneHint.textContent = mode === "gemini"
+    ? "支援多檔同時上傳・PDF 格式・會上傳到 Google Gemini 進行辨識"
+    : "支援多檔同時上傳・PDF 格式・辨識完全在本機瀏覽器內進行";
+}
+document.querySelectorAll('input[name="ocrMode"]').forEach(r => r.addEventListener("change", updateOcrModeUi));
+geminiApiKeyInput.addEventListener("change", () => setStoredGeminiKey(geminiApiKeyInput.value.trim()));
+geminiModelInput.addEventListener("change", () => setStoredGeminiModel(geminiModelInput.value.trim()));
+document.getElementById("geminiKeyToggleBtn").addEventListener("click", () => {
+  geminiApiKeyInput.type = geminiApiKeyInput.type === "password" ? "text" : "password";
+});
+
 document.getElementById("openImportBtn").addEventListener("click", () => {
+  geminiApiKeyInput.value = getStoredGeminiKey();
+  geminiModelInput.value = getStoredGeminiModel();
+  updateOcrModeUi();
   document.getElementById("importOverlay").classList.add("show");
 });
 document.getElementById("importCloseBtn").addEventListener("click", () => {
@@ -1498,7 +1691,18 @@ function handleFiles(fileList){
   if (skipped.length) {
     alert(`以下檔案的檔名已存在於清單中，已略過，未重複上傳：\n${skipped.join("\n")}`);
   }
-  accepted.forEach(f => enqueueTask(() => processFile(f)));
+  if (!accepted.length) return;
+
+  const mode = currentOcrMode();
+  let apiKey = "", model = "";
+  if (mode === "gemini") {
+    apiKey = geminiApiKeyInput.value.trim();
+    model = geminiModelInput.value.trim() || "gemini-2.0-flash";
+    if (!apiKey) { alert("請先輸入 Gemini API Key 才能用 AI 雲端辨識。"); return; }
+    setStoredGeminiKey(apiKey);
+    setStoredGeminiModel(model);
+  }
+  accepted.forEach(f => enqueueTask(() => processFile(f, mode, apiKey, model)));
 }
 
 dropzone.addEventListener("click", () => fileInput.click());
@@ -1520,9 +1724,13 @@ dropzone.addEventListener("drop", (e) => {
     // Metadata extraction rules improve over time; the raw OCR text is kept
     // per record specifically so already-processed documents can be
     // re-parsed with the latest rules on load, without re-running OCR.
+    // Gemini records skip this — their meta came straight from the model's
+    // structured output, not from the regex-based extractMetadata() pass,
+    // so re-running that heuristic over Gemini's transcribed text would
+    // silently replace a better answer with a worse one.
     const reparsed = [];
     for (const r of records) {
-      if (r.status === "done" && r.ocrTextRaw && !r.metaEdited) {
+      if (r.status === "done" && r.ocrTextRaw && !r.metaEdited && r.ocrMethod !== "gemini") {
         const freshMeta = extractMetadata(r.ocrTextRaw, r.titleLineRaw, r.pageTitleLines);
         if (JSON.stringify(freshMeta) !== JSON.stringify(r.meta)) {
           r.meta = freshMeta;

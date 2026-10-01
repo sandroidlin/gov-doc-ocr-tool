@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>米花市教育局公文建檔</title>
+<title>公文 OCR 建檔工具</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -75,7 +75,6 @@
     font-family:var(--v-font-title); font-size:1.5rem; margin:0; font-weight:600; letter-spacing:-.01em;
     color:var(--v-text); transition:font-size .15s;
   }
-  header h1 span{color:var(--v-primary);}
   header p{
     margin:4px 0 0; color:var(--v-text-secondary); font-size:.78rem; max-width:520px;
     overflow:hidden; max-height:40px; opacity:1; transition:max-height .15s, opacity .15s, margin .15s;
@@ -213,9 +212,6 @@
     font-size:.68rem; font-weight:600; white-space:nowrap; line-height:1.7;
   }
   .chip .chip-icon{ width:11px; height:11px; flex:none; }
-  .chip.tone-sent{ background:var(--v-primary-selected); color:var(--v-primary-hover); }
-  .chip.tone-received{ background:var(--v-positive-selected); color:var(--v-positive); }
-  .chip.tone-internal{ background:var(--v-indigo-selected); color:var(--v-indigo); }
   .chip.tone-unknown{ background:var(--v-bg-disabled); color:var(--v-text-secondary); }
   .chip.tone-local{ background:var(--v-bg-disabled); color:var(--v-text-secondary); }
   .chip.tone-gemini{ background:var(--v-indigo-selected); color:var(--v-indigo); }
@@ -407,7 +403,7 @@
 <div class="wrap">
   <header>
     <div>
-      <h1><span>米花市政府教育局</span> 公文 OCR 建檔工具</h1>
+      <h1>公文 OCR 建檔工具</h1>
       <p id="pageSubtitle">資料僅儲存於此瀏覽器（IndexedDB），清除瀏覽器資料將會遺失清單。原始 PDF 與辨識結果皆不會上傳到任何伺服器。</p>
     </div>
     <div class="stats">
@@ -665,40 +661,10 @@ let records = [];
 let worker = null;
 let workerReady = false;
 
-// --- 發文 / 收文 / 局內 classification --------------------------------------
-// This tool is dedicated to 米花市政府教育局.
-// 局內 (internal): 簽 is, by Taiwanese government document convention, always
-// an internal routing/approval document — it never leaves the issuing office
-// — so docType alone is a reliable signal and doesn't depend on OCR having
-// caught the full agency name (internal memos often print just the division,
-// e.g. "國教科", not the full "米花市政府教育局國教科").
-// 發文 (outgoing): 發文機關 names this office (for 函/書函/公告 etc.).
-// 收文 (incoming): 受文者 names this office. A 受文者 is often a generic
-// circular list rather than this office by name — e.g. "各直轄市、縣(市)
-// 政府教育局(處)" — so a line starting with 各 that mentions 教育局/教育處
-// also counts as addressed to us.
-const OUR_ORG = "米花市政府教育局";
-const OUR_ORG_UNIT = "教育局";
-// docType carries its own "簽" value, but the 發文字號 pattern is kept as a
-// second, independent signal — it still catches an internal memo even if
-// docType was misclassified or a user changed it manually.
+// 發文字號裡的「簽第」是判斷文別＝簽（內部簽呈）最可靠的訊號，跟機關是
+// 誰無關，純粹是公文程式條例的格式慣例，所以留著給 extractMetadata() 判斷
+// 文別用。
 const IS_INTERNAL_MEMO_RE = /簽第/;
-
-function classifyDirection(meta){
-  if (!meta) return "unknown";
-  if (meta.docType === "簽" || IS_INTERNAL_MEMO_RE.test(meta.docNumber || "")) return "internal";
-  const agencyMatch = !!(meta.agency && meta.agency.includes(OUR_ORG));
-  const recipientText = (meta.recipient || "").trim();
-  const recipientMatch = !!recipientText && (
-    recipientText.includes(OUR_ORG) ||
-    (/^各/.test(recipientText) && (recipientText.includes(OUR_ORG_UNIT) || recipientText.includes("教育處")))
-  );
-  if (agencyMatch && !recipientMatch) return "sent";
-  if (recipientMatch && !agencyMatch) return "received";
-  if (agencyMatch && recipientMatch) return "sent";
-  return "unknown";
-}
-const DIRECTION_LABEL = { sent: "發文", received: "收文", internal: "局內", unknown: "未分類" };
 
 // Same two icons as the import dialog's mode picker, reused here so the
 // table chip reads as "the same thing, smaller" rather than a different symbol.
@@ -899,9 +865,8 @@ function extractMetadata(rawText, titleLineRaw, pageTitleLines){
   // 簽…). Of that tail, only 簽/書函/開會通知單 actually turn up in this
   // office's real correspondence, so those three get their own docType value
   // — everything else in the tail (手令、箋函…) still falls into the generic
-  // "其他公文" bucket. 簽 is checked first and via multiple signals because
-  // it's also the one signal classifyDirection() needs to recognize an
-  // internal memo (see IS_INTERNAL_MEMO_RE below).
+  // "其他公文" bucket. 簽 is checked first and via multiple signals since a
+  // single trailing glyph is exactly what OCR misreads most often.
   const docType =
     IS_INTERNAL_MEMO_RE.test(docNumber) || headerLines.some(l => /簽$/.test(l)) || /^擬辦/m.test(norm) ? "簽" :
     headerLines.some(l => /開會通知單$/.test(l)) ? "開會通知單" :
@@ -1312,9 +1277,7 @@ function renderTable(){
     const isDone = r.status === "done";
     let tagsHtml;
     if (isDone) {
-      const dir = classifyDirection(r.meta);
-      tagsHtml = `<span class="chip tone-${dir}">${escapeHtml(DIRECTION_LABEL[dir])}</span>`
-        + (r.meta.docType ? `<span class="chip tone-unknown">${escapeHtml(r.meta.docType)}</span>` : "")
+      tagsHtml = (r.meta.docType ? `<span class="chip tone-unknown">${escapeHtml(r.meta.docType)}</span>` : "")
         + `<span class="chip tone-${r.ocrMethod === "gemini" ? "gemini" : "local"}">${OCR_METHOD_ICON[r.ocrMethod === "gemini" ? "gemini" : "local"]}${r.ocrMethod === "gemini" ? "Gemini" : "本機"}</span>`
         + (r.metaEdited ? `<span class="muted" style="font-size:.72rem">內容已手動校正</span>` : "");
     } else if (r.status === "error") {

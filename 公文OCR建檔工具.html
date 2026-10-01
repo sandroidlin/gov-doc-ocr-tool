@@ -1035,28 +1035,39 @@ function canvasToBase64Png(canvas){
   return canvas.toDataURL("image/png").split(",")[1];
 }
 
-async function callGeminiOcr(canvases, apiKey, model){
+// 503（過載）跟 429（超過速率限制）都是 Google 自己說的「暫時性，等等再試」
+// 錯誤，不是請求本身有問題 — 自動重試幾次再放棄，比丟給使用者手動重試省事。
+const GEMINI_RETRY_STATUSES = new Set([503, 429]);
+const GEMINI_RETRY_DELAYS_MS = [3000, 8000, 15000];
+
+async function callGeminiOcr(canvases, apiKey, model, onRetry){
   const parts = [{ text: GEMINI_PROMPT }];
   for (const canvas of canvases) {
     parts.push({ inlineData: { mimeType: "image/png", data: canvasToBase64Png(canvas) } });
   }
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { responseMimeType: "application/json", responseSchema: GEMINI_FIELD_SCHEMA },
-    }),
+  const body = JSON.stringify({
+    contents: [{ parts }],
+    generationConfig: { responseMimeType: "application/json", responseSchema: GEMINI_FIELD_SCHEMA },
   });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Gemini API 錯誤（${res.status}）：${body.slice(0, 200) || res.statusText}`);
+
+  let lastErrorText = "";
+  for (let attempt = 0; attempt <= GEMINI_RETRY_DELAYS_MS.length; attempt++) {
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    if (res.ok) {
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error("Gemini 沒有回傳可用的內容，請確認 API Key 與模型名稱是否正確。");
+      return JSON.parse(text);
+    }
+    const respBody = await res.text().catch(() => "");
+    lastErrorText = `Gemini API 錯誤（${res.status}）：${respBody.slice(0, 200) || res.statusText}`;
+    const delay = GEMINI_RETRY_DELAYS_MS[attempt];
+    if (!GEMINI_RETRY_STATUSES.has(res.status) || delay === undefined) throw new Error(lastErrorText);
+    if (onRetry) onRetry(attempt + 1, GEMINI_RETRY_DELAYS_MS.length + 1, res.status, delay);
+    await new Promise(r => setTimeout(r, delay));
   }
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Gemini 沒有回傳可用的內容，請確認 API Key 與模型名稱是否正確。");
-  return JSON.parse(text);
+  throw new Error(lastErrorText);
 }
 
 async function runGeminiPipeline(record, fileBlob, apiKey, model){
@@ -1066,7 +1077,10 @@ async function runGeminiPipeline(record, fileBlob, apiKey, model){
     record.pageCount = canvases.length;
     record.statusDetail = "傳送到 Gemini 辨識中…";
     renderTable();
-    const fields = await callGeminiOcr(canvases, apiKey, model);
+    const fields = await callGeminiOcr(canvases, apiKey, model, (attempt, total, status, delayMs) => {
+      record.statusDetail = `Gemini ${status === 429 ? "超過速率限制" : "忙線中"}，${Math.round(delayMs / 1000)} 秒後重試（第 ${attempt}/${total} 次）…`;
+      renderTable();
+    });
     const fullText = (fields.fullText || "").trim();
     record.ocrTextRaw = fullText;
     record.ocrText = fullText;

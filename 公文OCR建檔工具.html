@@ -343,7 +343,8 @@
     border-radius:var(--v-radius-sm); font-family:inherit; font-size:.82rem;
   }
   #geminiApiKeyInput{ flex:1; min-width:180px; }
-  .gemini-model-input{ width:160px; font-family:var(--v-mono); font-size:.76rem !important; }
+  .gemini-model-input{ width:220px; font-family:var(--v-mono); font-size:.76rem !important; }
+  select.gemini-model-input{ font-family:inherit; cursor:pointer; }
   .gemini-key-hint{ width:100%; font-size:.72rem; color:var(--v-text-secondary); line-height:1.5; }
   .gemini-key-hint a{ color:var(--v-link); }
 
@@ -512,7 +513,14 @@
       <button type="button" class="icon-btn" id="geminiKeyToggleBtn" title="顯示／隱藏">
         <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 10S5 4 10 4s8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.4"/></svg>
       </button>
-      <input type="text" id="geminiModelInput" value="gemini-2.0-flash" title="Gemini 模型名稱" class="gemini-model-input">
+      <select id="geminiModelSelect" title="Gemini 模型" class="gemini-model-input">
+        <option value="gemini-2.5-pro">Gemini 2.5 Pro（最準確，較慢）</option>
+        <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash（建議，推薦預設）</option>
+        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite（最快最便宜）</option>
+        <option value="gemini-2.0-flash">Gemini 2.0 Flash（舊版）</option>
+        <option value="__custom__">自訂模型名稱…</option>
+      </select>
+      <input type="text" id="geminiModelCustomInput" placeholder="輸入模型名稱，例如 gemini-3-pro" class="gemini-model-input" hidden>
       <button type="button" class="act" id="geminiSaveKeyBtn">儲存</button>
       <span class="gemini-key-hint">Key 只存在這台瀏覽器（localStorage），不會存進 PDF 或匯出的檔案。<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">去 Google AI Studio 申請</a></span>
     </div>
@@ -1095,11 +1103,12 @@ function setStoredGeminiKey(v){
     else localStorage.removeItem("govDocOcrGeminiKey");
   } catch (e) {}
 }
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 function getStoredGeminiModel(){
-  try { return localStorage.getItem("govDocOcrGeminiModel") || "gemini-2.0-flash"; } catch (e) { return "gemini-2.0-flash"; }
+  try { return localStorage.getItem("govDocOcrGeminiModel") || DEFAULT_GEMINI_MODEL; } catch (e) { return DEFAULT_GEMINI_MODEL; }
 }
 function setStoredGeminiModel(v){
-  try { localStorage.setItem("govDocOcrGeminiModel", v || "gemini-2.0-flash"); } catch (e) {}
+  try { localStorage.setItem("govDocOcrGeminiModel", v || DEFAULT_GEMINI_MODEL); } catch (e) {}
 }
 
 async function processFile(file, mode, geminiApiKey, geminiModel){
@@ -1622,12 +1631,36 @@ document.getElementById("clearFiltersBtn").addEventListener("click", () => {
 // --- 匯入公文資料 dialog ----------------------------------------------------
 const geminiKeyRow = document.getElementById("geminiKeyRow");
 const geminiApiKeyInput = document.getElementById("geminiApiKeyInput");
-const geminiModelInput = document.getElementById("geminiModelInput");
+const geminiModelSelect = document.getElementById("geminiModelSelect");
+const geminiModelCustomInput = document.getElementById("geminiModelCustomInput");
 const dropzoneHint = document.getElementById("dropzoneHint");
 
 function currentOcrMode(){
   return document.querySelector('input[name="ocrMode"]:checked').value;
 }
+// The select covers the handful of models worth defaulting to; "自訂模型
+// 名稱…" reveals a free-text field so a newer model than whatever's in
+// that fixed list still just works without a code change.
+function currentGeminiModel(){
+  return geminiModelSelect.value === "__custom__"
+    ? geminiModelCustomInput.value.trim()
+    : geminiModelSelect.value;
+}
+function setGeminiModelUi(model){
+  const hasOption = [...geminiModelSelect.options].some(o => o.value === model);
+  if (hasOption) {
+    geminiModelSelect.value = model;
+    geminiModelCustomInput.hidden = true;
+  } else {
+    geminiModelSelect.value = "__custom__";
+    geminiModelCustomInput.hidden = false;
+    geminiModelCustomInput.value = model;
+  }
+}
+geminiModelSelect.addEventListener("change", () => {
+  geminiModelCustomInput.hidden = geminiModelSelect.value !== "__custom__";
+  if (!geminiModelCustomInput.hidden) geminiModelCustomInput.focus();
+});
 function updateOcrModeUi(){
   const mode = currentOcrMode();
   geminiKeyRow.hidden = mode !== "gemini";
@@ -1646,7 +1679,7 @@ const geminiSaveKeyBtn = document.getElementById("geminiSaveKeyBtn");
 let geminiSaveResetTimer = null;
 geminiSaveKeyBtn.addEventListener("click", () => {
   setStoredGeminiKey(geminiApiKeyInput.value.trim());
-  setStoredGeminiModel(geminiModelInput.value.trim());
+  setStoredGeminiModel(currentGeminiModel());
   clearTimeout(geminiSaveResetTimer);
   geminiSaveKeyBtn.textContent = "已儲存 ✓";
   geminiSaveKeyBtn.classList.add("saved");
@@ -1658,7 +1691,7 @@ geminiSaveKeyBtn.addEventListener("click", () => {
 
 document.getElementById("openImportBtn").addEventListener("click", () => {
   geminiApiKeyInput.value = getStoredGeminiKey();
-  geminiModelInput.value = getStoredGeminiModel();
+  setGeminiModelUi(getStoredGeminiModel());
   updateOcrModeUi();
   document.getElementById("importOverlay").classList.add("show");
 });
@@ -1729,8 +1762,9 @@ function handleFiles(fileList){
   let apiKey = "", model = "";
   if (mode === "gemini") {
     apiKey = geminiApiKeyInput.value.trim();
-    model = geminiModelInput.value.trim() || "gemini-2.0-flash";
+    model = currentGeminiModel() || DEFAULT_GEMINI_MODEL;
     if (!apiKey) { alert("請先輸入 Gemini API Key 才能用 AI 雲端辨識。"); return; }
+    if (!model) { alert("請輸入自訂模型名稱。"); return; }
     setStoredGeminiKey(apiKey);
     setStoredGeminiModel(model);
   }

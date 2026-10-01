@@ -514,10 +514,7 @@
         <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 10S5 4 10 4s8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.4"/></svg>
       </button>
       <select id="geminiModelSelect" title="Gemini 模型" class="gemini-model-input">
-        <option value="gemini-2.5-pro">Gemini 2.5 Pro（最準確，較慢）</option>
-        <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash（建議，推薦預設）</option>
-        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite（最快最便宜）</option>
-        <option value="gemini-2.0-flash">Gemini 2.0 Flash（舊版）</option>
+        <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash（建議，推薦預設）</option>
         <option value="__custom__">自訂模型名稱…</option>
       </select>
       <input type="text" id="geminiModelCustomInput" placeholder="輸入模型名稱，例如 gemini-3-pro" class="gemini-model-input" hidden>
@@ -1103,9 +1100,15 @@ function setStoredGeminiKey(v){
     else localStorage.removeItem("govDocOcrGeminiKey");
   } catch (e) {}
 }
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
+// Models Google has since cut off for new API keys — a value saved here
+// before the retirement would otherwise keep silently 404ing forever.
+const RETIRED_GEMINI_MODELS = new Set(["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]);
 function getStoredGeminiModel(){
-  try { return localStorage.getItem("govDocOcrGeminiModel") || DEFAULT_GEMINI_MODEL; } catch (e) { return DEFAULT_GEMINI_MODEL; }
+  try {
+    const v = localStorage.getItem("govDocOcrGeminiModel");
+    return (v && !RETIRED_GEMINI_MODELS.has(v)) ? v : DEFAULT_GEMINI_MODEL;
+  } catch (e) { return DEFAULT_GEMINI_MODEL; }
 }
 function setStoredGeminiModel(v){
   try { localStorage.setItem("govDocOcrGeminiModel", v || DEFAULT_GEMINI_MODEL); } catch (e) {}

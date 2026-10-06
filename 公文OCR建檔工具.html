@@ -757,7 +757,7 @@ function cleanOcrText(raw){
 const FIELD_DEFS = [
   ["docNumber", /^(?:發文字號|字\s*號)[:：]?\s*/],
   ["docDate", /^(?:發文日期)[:：]?\s*/],
-  ["speed", /^(?:速別)[:：]?\s*/],
+  ["speed", /^(?:速別|連別)[:：]?\s*/],
   // "期限" is a single trailing-ish glyph run inside a longer label, exactly
   // the kind of thing OCR misreads (seen as "期腿") — without the wildcard
   // tail, a misread there falls back to matching just "密等" and leaves
@@ -767,13 +767,40 @@ const FIELD_DEFS = [
   // strip the optional numbering too, so the captured value is just the title.
   ["attachment", /^附件[一二三四五六七八九十0-9]*[:：]?\s*/],
   ["recipient", /^(?:受文者)[:：]?\s*/],
-  ["subject", /^(?:主旨|案由)[:：]?\s*/],
+  ["subject", /^(?:主旨|主員|案由)[:：]?\s*/],
   ["explanation", /^(?:說明)[:：]?\s*/],
   ["proposal", /^(?:擬辦(?:事項)?)[:：]?\s*/],
 ];
 // Lines starting with these end whatever field was open, without becoming a
 // captured field themselves (so e.g. 正本/副本 don't get absorbed into 說明).
 const TERMINAL_RE = /^(?:正本|副本|承辦人|會辦|批示|檔號|保存年限|地址|聯絡人|聯絡方式|電話|電子郵件|機關全銜|上呈|敬陳|第\s*\d+\s*頁)/;
+const NOISY_COPY_TERMINAL_RE = /^.{0,3}(?:正本|副本)[:：]/;
+// Binding marks, page ornaments, and stamps near the left margin are often
+// joined onto the beginning of a real label by Tesseract (for example
+// ".速別", ":受文者", "3附件", or "‧主旨"). Remove only a short
+// non-CJK prefix and only when a known field/terminal label follows it. This
+// keeps numbered body paragraphs such as "一、附件…" intact.
+const KNOWN_LINE_LABEL_RE = /^(?:發文字號|字\s*號|發文日期|速別|連別|密等|附件|受文者|主旨|主員|案由|說明|擬辦|正本|副本|承辦人|會辦|批示|檔號|保存年限|地址|聯絡人|聯絡方式|電話|電子郵件|機關全銜|上呈|敬陳)/;
+const KNOWN_COLON_LABEL_RE = /^(?:發文字號|字\s*號|發文日期|速別|連別|密等(?:及解密條件或保密期.{0,2})?|附件[一二三四五六七八九十0-9]*|受文者|主旨|主員|案由|說明|擬辦(?:事項)?|正本|副本)[:：]/;
+
+function stripLeadingOcrNoise(line){
+  const trimmed = (line || "").trim();
+  if (KNOWN_LINE_LABEL_RE.test(trimmed)) return trimmed;
+  const match = trimmed.match(/^[^一-鿿豈-﫿]{1,4}/);
+  if (match) {
+    const candidate = trimmed.slice(match[0].length);
+    if (KNOWN_LINE_LABEL_RE.test(candidate)) return candidate;
+  }
+  // A vertical binding mark is occasionally recognized as one or two CJK
+  // glyphs (for example "由主旨" or "農。速別"). Only discard such a
+  // prefix when a known label followed by a real colon begins immediately
+  // afterwards; ordinary prose mentioning the word remains untouched.
+  for (let prefixLength = 1; prefixLength <= 3; prefixLength++) {
+    const candidate = trimmed.slice(prefixLength);
+    if (KNOWN_COLON_LABEL_RE.test(candidate)) return candidate;
+  }
+  return trimmed;
+}
 // A short field (附件, 主旨, 速別…) should never run past the page it started
 // on — a page break almost always means "the attached document's own text
 // starts here", not "this field continues". 說明/擬辦 are the exception:
@@ -795,7 +822,8 @@ function parseFields(norm){
       if (current && !CONTINUES_ACROSS_PAGES.has(current)) current = null;
       continue;
     }
-    const hit = FIELD_DEFS.find(([, re]) => re.test(line));
+    const labelLine = stripLeadingOcrNoise(line);
+    const hit = FIELD_DEFS.find(([, re]) => re.test(labelLine));
     if (hit) {
       const [key, re] = hit;
       // A label line always starts (or restarts) that field — it never
@@ -806,17 +834,17 @@ function parseFields(norm){
       // instead of the second, more specific occurrence simply replacing
       // the placeholder.
       current = SINGLE_LINE_FIELDS.has(key) ? null : key;
-      out[key] = line.replace(re, "");
+      out[key] = labelLine.replace(re, "");
       continue;
     }
-    if (TERMINAL_RE.test(line)) { current = null; continue; }
+    if (TERMINAL_RE.test(labelLine) || NOISY_COPY_TERMINAL_RE.test(line)) { current = null; continue; }
     if (current) out[current] = (out[current] || "") + " " + line;
   }
   for (const k in out) out[k] = out[k].replace(/\s+/g, " ").trim();
   return out;
 }
 
-const AGENCY_SUFFIX = "(局|處|府|署|部|委員會|科|室|中心|管理處|事務所|公所|公司|行|學校|國小|國中|高中)";
+const AGENCY_SUFFIX = "(局|處|府|院|署|部|委員會|科|室|中心|管理處|事務所|公所|公司|行|學校|國小|國中|高中)";
 const AGENCY_SUFFIX_RE = new RegExp(AGENCY_SUFFIX + "$");
 
 // The 發文機關/公司 name is reliably the visually largest line near the top
@@ -851,7 +879,10 @@ function findTitleLineIndex(lines, pageHeight){
 // that garbage looks like, only on where the agency name itself ends.
 function extractAgencyFromTitleLine(titleLineRaw){
   if (!titleLineRaw) return "";
-  const original = cleanOcrText(titleLineRaw).replace(/\n/g, "").trim();
+  const original = cleanOcrText(titleLineRaw)
+    .replace(/\n/g, "")
+    .replace(/^填報單位[:：]?\s*/, "")
+    .trim();
   if (!original) return "";
   const matches = [...original.matchAll(new RegExp(AGENCY_SUFFIX, "g"))];
   const last = matches[matches.length - 1];
@@ -859,7 +890,12 @@ function extractAgencyFromTitleLine(titleLineRaw){
     const cut = original.slice(0, last.index + last[0].length);
     if (cut.length >= 3) return cut;
   }
-  return original;
+  const withoutDocType = original.replace(/\s*(?:令|呈|咨|函|簽|書函|公告|開會通知單)\s*$/, "").trim();
+  if (withoutDocType !== original && withoutDocType.length >= 3) return withoutDocType;
+  // A line without an agency-type suffix is not a safe letterhead candidate.
+  // Returning it used to let an unusually tall address/contact line override
+  // the text-based header fallback entirely.
+  return "";
 }
 
 // "如說明" / "詳如說明" etc. is a placeholder meaning "see the 說明 section"
@@ -872,6 +908,14 @@ function extractMetadata(rawText, titleLineRaw, pageTitleLines){
   const headerLines = norm.split("\n").map(l => l.trim()).filter(Boolean).slice(0, 8);
 
   const fields = parseFields(norm);
+  // If OCR destroys the 受文者 label itself, the first 正本 line is still a
+  // faithful fallback in ordinary outgoing documents (and also preserves
+  // values such as "(存查)" on internal meeting records).
+  const copyRecipientLine = norm
+    .split("\n")
+    .map(stripLeadingOcrNoise)
+    .find(line => /^正本[:：]/.test(line)) || "";
+  const copyRecipient = copyRecipientLine.replace(/^正本[:：]\s*/, "").trim();
   const docNumber = fields.docNumber
     || (norm.match(/[一-鿿]{1,10}(?:字|簽)第[0-9０-９]+號/) || [""])[0];
   const docDate = fields.docDate
@@ -905,12 +949,15 @@ function extractMetadata(rawText, titleLineRaw, pageTitleLines){
   // Prefer the bbox-detected letterhead line when we have one (new OCR
   // runs); fall back to the old text-only heuristic for records OCR'd
   // before this line-height data was captured.
+  const reportedAgencyMatch = norm.match(new RegExp("填報單位[:：]?\\s*([^\\n]{2,30}?" + AGENCY_SUFFIX + ")"));
+  const reportedAgency = (reportedAgencyMatch?.[1] || "").trim();
   const agencyLine = extractAgencyFromTitleLine(titleLineRaw) || (
     headerLines
+      .map(stripLeadingOcrNoise)
       .filter(l => !FIELD_DEFS.some(([, re]) => re.test(l)) && !TERMINAL_RE.test(l))
-      .map(l => l.replace(/\s*(令|呈|咨|函|簽|書函|公告|開會通知單)\s*$/, "").trim())
-      .find(l => AGENCY_SUFFIX_RE.test(l) && l.length >= 3 && l.length <= 20)
-  ) || "";
+      .map(extractAgencyFromTitleLine)
+      .find(l => l.length >= 3 && l.length <= 20)
+  ) || reportedAgency || "";
 
   // 密等及解密條件或保密期限 is filled in as one line, e.g. "密，草案核備
   // 後解除" — the level (密/機密/極機密/絕對機密) and the declassify
@@ -927,7 +974,14 @@ function extractMetadata(rawText, titleLineRaw, pageTitleLines){
   // placeholder text.
   let attachment = (fields.attachment || "").trim();
   if ((!attachment || ATTACHMENT_PLACEHOLDER_RE.test(attachment.replace(/\s+/g, ""))) && Array.isArray(pageTitleLines)) {
-    for (const raw of pageTitleLines.slice(1)) {
+    const rawPages = (rawText || "").split(PAGE_BREAK);
+    for (let pageIndex = 1; pageIndex < pageTitleLines.length; pageIndex++) {
+      const raw = pageTitleLines[pageIndex];
+      const topLines = cleanOcrText(rawPages[pageIndex] || "").split("\n").slice(0, 12).map(stripLeadingOcrNoise);
+      // A continuation/signature page can also contain one visually large
+      // line. Only treat it as an attachment title when the page itself is
+      // explicitly introduced as an attachment.
+      if (!topLines.some(l => /^\s*附件[一二三四五六七八九十0-9]*[:：]?/.test(l))) continue;
       const candidate = cleanOcrText(raw || "").replace(/\n/g, "").trim();
       if (candidate.length >= 4 && candidate.length <= 60) { attachment = candidate; break; }
     }
@@ -936,10 +990,120 @@ function extractMetadata(rawText, titleLineRaw, pageTitleLines){
   return {
     docType, agency: agencyLine, docNumber, docDate,
     speed: fields.speed || "", security, declassifyCondition,
-    attachment, recipient: fields.recipient || "",
+    attachment, recipient: fields.recipient || copyRecipient,
     subject: fields.subject || "",
     explanation: fields.explanation || "", proposal: fields.proposal || "",
   };
+}
+
+// Many offices save a PDF using its exact 發文字號. When OCR gets one glyph
+// in the prefix wrong but reads the long numeric run correctly, the exact-name
+// filename is stronger evidence than the scan. It is only trusted when the
+// basename is itself a complete document number and both numeric runs agree.
+function reconcileMetadataWithFilename(meta, sourceFilename){
+  const basename = (sourceFilename || "")
+    .replace(/^.*[\\/]/, "")
+    .replace(/\.pdf$/i, "")
+    .trim();
+  if (!/^[一-鿿]{1,12}(?:字|簽)第[0-9０-９]+號$/.test(basename)) return meta;
+  const digits = value => ((value || "").match(/第([0-9０-９]+)號/) || ["", ""])[1]
+    .replace(/[０-９]/g, ch => String(ch.charCodeAt(0) - 0xFF10));
+  if (!meta.docNumber || digits(meta.docNumber) === digits(basename)) meta.docNumber = basename;
+  return meta;
+}
+
+// --- multi-document PDF segmentation ---------------------------------------
+// Some registry exports bundle many separately issued letters (plus stamp or
+// filing pages) into one PDF. Detect strong cover-page signals per OCR page,
+// then run the ordinary metadata parser on each page range independently.
+// Splitting is deliberately conservative: at least three strong cover pages
+// must be present, so a normal cover letter followed by one official-looking
+// attachment keeps the existing single-record behaviour.
+function pageHasDocumentHeader(rawPageText){
+  const norm = cleanOcrText(rawPageText || "");
+  const fields = parseFields(norm);
+  const hasRecipient = Boolean(fields.recipient);
+  const hasDocNumber = Boolean(fields.docNumber) || /[一-鿿]{1,12}(?:字|簽)第[0-9０-９]+號/.test(norm);
+  const hasDocDate = Boolean(fields.docDate) || /中華民國\s*[0-9０-９一二三四五六七八九十]{1,3}\s*年/.test(norm);
+  return hasRecipient && hasDocNumber && hasDocDate;
+}
+
+function detectDocumentSegments(pageTexts){
+  const count = Array.isArray(pageTexts) ? pageTexts.length : 0;
+  if (!count) return [];
+  const starts = [0];
+  for (let i = 1; i < count; i++) {
+    if (pageHasDocumentHeader(pageTexts[i])) starts.push(i);
+  }
+  if (starts.length < 3) return [{ start: 0, end: count - 1 }];
+  return starts.map((start, i) => ({
+    start,
+    end: i + 1 < starts.length ? starts[i + 1] - 1 : count - 1,
+  }));
+}
+
+function createRecordId(){
+  return (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + "-" + Math.random());
+}
+
+function segmentedFilename(sourceFilename, startPage, endPage){
+  const match = (sourceFilename || "公文.pdf").match(/^(.*?)(\.[^.]+)?$/);
+  const base = match?.[1] || sourceFilename || "公文";
+  const ext = match?.[2] || ".pdf";
+  const range = startPage === endPage ? `第${startPage}頁` : `第${startPage}-${endPage}頁`;
+  return `${base}（${range}）${ext}`;
+}
+
+function buildLocalOcrRecord(baseRecord, pageTexts, pageTitleLines, segment, segmentIndex, segmentCount){
+  const segmentTexts = pageTexts.slice(segment.start, segment.end + 1);
+  const segmentTitles = pageTitleLines.slice(segment.start, segment.end + 1);
+  const rawText = segmentTexts.join(`\n${PAGE_BREAK}\n`).trim();
+  const sourceFilename = baseRecord.sourceFilename || baseRecord.filename;
+  const startPage = segment.start + 1;
+  const endPage = segment.end + 1;
+  const meta = reconcileMetadataWithFilename(
+    extractMetadata(rawText, segmentTitles[0] || "", segmentTitles),
+    sourceFilename,
+  );
+  return {
+    ...baseRecord,
+    id: segmentIndex === 0 ? baseRecord.id : createRecordId(),
+    filename: segmentCount > 1 ? segmentedFilename(sourceFilename, startPage, endPage) : sourceFilename,
+    sourceFilename,
+    sourcePageCount: pageTexts.length,
+    pageStart: startPage,
+    pageEnd: endPage,
+    segmentIndex: segmentIndex + 1,
+    segmentCount,
+    pageCount: segmentTexts.length,
+    titleLineRaw: segmentTitles[0] || "",
+    pageTitleLines: segmentTitles,
+    ocrTextRaw: rawText,
+    ocrText: cleanOcrText(rawText).split(PAGE_BREAK).join("\n── 分頁 ──\n"),
+    meta,
+    metaEdited: false,
+    ocrMethod: "local",
+    status: "done",
+    statusDetail: "",
+  };
+}
+
+function applySegmentConsensus(segmentRecords){
+  if (!Array.isArray(segmentRecords) || segmentRecords.length < 3) return segmentRecords;
+  const agencyCounts = new Map();
+  for (const r of segmentRecords) {
+    const agency = (r.meta?.agency || "").trim();
+    if (agency) agencyCounts.set(agency, (agencyCounts.get(agency) || 0) + 1);
+  }
+  const ranked = [...agencyCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const [agency, count] = ranked[0] || ["", 0];
+  const nonEmptyCount = [...agencyCounts.values()].reduce((sum, n) => sum + n, 0);
+  // Fill only missing values, and only when a clear majority of the bundle
+  // agrees. Never overwrite a different agency actually read from a page.
+  if (agency && count >= 2 && count / Math.max(nonEmptyCount, 1) >= 0.6) {
+    for (const r of segmentRecords) if (!r.meta.agency) r.meta.agency = agency;
+  }
+  return segmentRecords;
 }
 
 // --- pipeline -------------------------------------------------------------
@@ -949,8 +1113,7 @@ async function runOcrPipeline(record, fileBlob){
     const canvases = await renderPdfPages(buf);
     record.pageCount = canvases.length;
     const w = await getWorker();
-    let fullText = "";
-    let titleLineRaw = "";
+    const pageTexts = [];
     // The same "line-height stands out from the page's body text" signal
     // that finds the letterhead on page 1 also finds an attached
     // document's own title heading on whichever later page it starts on —
@@ -966,20 +1129,17 @@ async function runOcrPipeline(record, fileBlob){
         const idx = findTitleLineIndex(data.lines, canvases[i].height);
         if (idx >= 0) pageTitle = data.lines[idx].text;
       }
-      if (i === 0) titleLineRaw = pageTitle;
       pageTitleLines.push(pageTitle);
-      if (i > 0) fullText += `\n${PAGE_BREAK}\n`;
-      fullText += data.text + "\n";
+      pageTexts.push((data.text || "").trim());
     }
-    record.titleLineRaw = titleLineRaw;
-    record.pageTitleLines = pageTitleLines;
-    record.ocrTextRaw = fullText.trim();
-    record.ocrText = cleanOcrText(fullText).split(PAGE_BREAK).join("\n── 分頁 ──\n");
-    record.meta = extractMetadata(record.ocrTextRaw, record.titleLineRaw, record.pageTitleLines);
-    record.metaEdited = false; // an explicit re-OCR intentionally starts over from scratch
-    record.ocrMethod = "local";
-    record.status = "done";
-    record.statusDetail = "";
+    const segments = detectDocumentSegments(pageTexts);
+    const parsedRecords = applySegmentConsensus(segments.map((segment, i) =>
+      buildLocalOcrRecord(record, pageTexts, pageTitleLines, segment, i, segments.length)));
+    const recordIndex = records.findIndex(r => r.id === record.id);
+    if (recordIndex >= 0) records.splice(recordIndex, 1, ...parsedRecords);
+    await Promise.all(parsedRecords.map(dbPut));
+    renderTable();
+    return;
   } catch (err) {
     console.error(err);
     record.status = "error";
@@ -1120,9 +1280,9 @@ function setStoredGeminiModel(v){
 }
 
 async function processFile(file, mode, geminiApiKey, geminiModel){
-  const id = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + "-" + Math.random());
+  const id = createRecordId();
   const record = {
-    id, filename: file.name, uploadedAt: new Date().toISOString(),
+    id, filename: file.name, sourceFilename: file.name, uploadedAt: new Date().toISOString(),
     fileBlob: file, status: "processing", statusDetail: "準備中…",
     pageCount: 0, ocrText: "", meta: {}, ocrMethod: mode,
   };
@@ -1340,7 +1500,7 @@ function triggerDownload(record){
   const url = URL.createObjectURL(record.fileBlob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = record.filename;
+  a.download = record.sourceFilename || record.filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1370,8 +1530,11 @@ let detailCurrentRecord = null;
 let detailEditing = false;
 
 function renderDetailView(record){
+  const pageLabel = record.pageStart && record.sourcePageCount > record.pageCount
+    ? `原檔第 ${record.pageStart}${record.pageEnd !== record.pageStart ? `-${record.pageEnd}` : ""} 頁 ・ 本段 ${record.pageCount} 頁`
+    : `共 ${record.pageCount} 頁`;
   document.getElementById("detailModalSub").textContent =
-    `共 ${record.pageCount} 頁 ・ 上傳於 ${new Date(record.uploadedAt).toLocaleString("zh-TW")}`;
+    `${pageLabel} ・ 上傳於 ${new Date(record.uploadedAt).toLocaleString("zh-TW")}`;
   const fields = [
     ["辨識方式", record.ocrMethod === "gemini" ? "AI 雲端辨識（Gemini）" : "瀏覽器地端辨識"],
     ["文別", record.meta.docType],
@@ -1431,7 +1594,7 @@ function openDetailModal(record){
 
   if (detailPreviewUrl) URL.revokeObjectURL(detailPreviewUrl);
   detailPreviewUrl = URL.createObjectURL(record.fileBlob);
-  document.getElementById("detailPdfFrame").src = detailPreviewUrl;
+  document.getElementById("detailPdfFrame").src = detailPreviewUrl + (record.pageStart > 1 ? `#page=${record.pageStart}` : "");
 
   document.getElementById("detailOverlay").classList.add("show");
 }
@@ -1768,7 +1931,7 @@ function handleFiles(fileList){
 
   // Block by filename — both against what's already in the list and
   // against duplicates within this same drop/selection batch.
-  const seenNames = new Set(records.map(r => r.filename));
+  const seenNames = new Set(records.map(r => r.sourceFilename || r.filename));
   const accepted = [];
   const skipped = [];
   for (const f of files) {
@@ -1811,7 +1974,35 @@ dropzone.addEventListener("drop", (e) => {
 (async function init(){
   try {
     records = await dbGetAll();
-    records.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+    records.sort((a, b) => {
+      const byUpload = new Date(b.uploadedAt) - new Date(a.uploadedAt);
+      if (byUpload) return byUpload;
+      const sameSource = (a.sourceFilename || a.filename) === (b.sourceFilename || b.filename);
+      return sameSource ? (a.segmentIndex || 0) - (b.segmentIndex || 0) : 0;
+    });
+
+    // Apply the multi-document splitter to local OCR records created by an
+    // older version too. The saved page separators and title-line array are
+    // enough to split them without paying the OCR cost a second time.
+    const expandedRecords = [];
+    const newlySplit = [];
+    for (const r of records) {
+      const canSplit = r.status === "done" && r.ocrTextRaw && !r.metaEdited
+        && r.ocrMethod !== "gemini" && !(r.segmentCount > 1);
+      const pageTexts = canSplit ? r.ocrTextRaw.split(PAGE_BREAK) : [];
+      const segments = canSplit ? detectDocumentSegments(pageTexts) : [];
+      if (segments.length > 1) {
+        const titles = Array.isArray(r.pageTitleLines) ? r.pageTitleLines : pageTexts.map(() => "");
+        const splitRecords = applySegmentConsensus(segments.map((segment, i) =>
+          buildLocalOcrRecord(r, pageTexts, titles, segment, i, segments.length)));
+        expandedRecords.push(...splitRecords);
+        newlySplit.push(...splitRecords);
+      } else {
+        expandedRecords.push(r);
+      }
+    }
+    records = expandedRecords;
+    if (newlySplit.length) await Promise.all(newlySplit.map(dbPut));
 
     // Metadata extraction rules improve over time; the raw OCR text is kept
     // per record specifically so already-processed documents can be
@@ -1823,12 +2014,29 @@ dropzone.addEventListener("drop", (e) => {
     const reparsed = [];
     for (const r of records) {
       if (r.status === "done" && r.ocrTextRaw && !r.metaEdited && r.ocrMethod !== "gemini") {
-        const freshMeta = extractMetadata(r.ocrTextRaw, r.titleLineRaw, r.pageTitleLines);
+        const freshMeta = reconcileMetadataWithFilename(
+          extractMetadata(r.ocrTextRaw, r.titleLineRaw, r.pageTitleLines),
+          r.sourceFilename || r.filename,
+        );
         if (JSON.stringify(freshMeta) !== JSON.stringify(r.meta)) {
           r.meta = freshMeta;
           reparsed.push(r);
         }
       }
+    }
+    const segmentGroups = new Map();
+    for (const r of records) {
+      if (!(r.segmentCount > 1)) continue;
+      const key = r.sourceFilename || r.filename;
+      if (!segmentGroups.has(key)) segmentGroups.set(key, []);
+      segmentGroups.get(key).push(r);
+    }
+    for (const group of segmentGroups.values()) {
+      const before = group.map(r => r.meta.agency || "");
+      applySegmentConsensus(group);
+      group.forEach((r, i) => {
+        if ((r.meta.agency || "") !== before[i] && !reparsed.includes(r)) reparsed.push(r);
+      });
     }
     if (reparsed.length) {
       await Promise.all(reparsed.map(r => dbPut(r)));

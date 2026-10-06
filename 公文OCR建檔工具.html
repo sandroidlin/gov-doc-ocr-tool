@@ -312,6 +312,18 @@
   #importModal .edit-modal-header{ margin-bottom:18px; }
   #importModal #dropzone{ margin-bottom:12px; }
 
+  #exportConfirmOverlay{
+    position:fixed; inset:0; background:rgba(41,47,76,.55); display:none;
+    align-items:center; justify-content:center; padding:24px 16px; z-index:60;
+  }
+  #exportConfirmOverlay.show{ display:flex; }
+  #exportConfirmModal{
+    background:var(--v-bg); max-width:420px; width:100%; border-radius:var(--v-radius-md);
+    border:1px solid var(--v-border-layout); box-shadow:var(--v-shadow-md); padding:22px 24px;
+  }
+  #exportConfirmModal h2{ font-family:var(--v-font-title); margin:0 0 10px; font-size:1.15rem; font-weight:600; }
+  #exportConfirmModal p{ margin:0 0 20px; line-height:1.6; }
+
   .ocr-mode-picker{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
   .ocr-mode-option{ cursor:pointer; }
   .ocr-mode-option input{ position:absolute; opacity:0; width:0; height:0; }
@@ -409,6 +421,7 @@
     <div class="stats">
       <div><b id="totalCount">0</b> 筆文件</div>
       <button class="btn-primary" id="openImportBtn" type="button">匯入公文資料</button>
+      <button class="btn-primary" id="exportMdBtn" type="button">匯出 Markdown</button>
     </div>
   </header>
 
@@ -467,6 +480,17 @@
   </table>
   <div id="emptyState" class="empty-state">尚未上傳任何文件</div>
   </section>
+</div>
+
+<div id="exportConfirmOverlay">
+  <div id="exportConfirmModal" role="dialog" aria-modal="true" aria-labelledby="exportConfirmTitle">
+    <h2 id="exportConfirmTitle">匯出 Markdown</h2>
+    <p id="exportConfirmText"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="exportConfirmCancelBtn" type="button">取消</button>
+      <button class="btn-primary" id="exportConfirmDownloadBtn" type="button">下載</button>
+    </div>
+  </div>
 </div>
 
 <div id="importOverlay">
@@ -1546,6 +1570,26 @@ async function exportMarkdown(targets, btn){
 
 document.getElementById("bulkDownloadMdBtn").addEventListener("click", (e) => {
   exportMarkdown(records.filter(r => selectedIds.has(r.id)), e.currentTarget);
+});
+
+// Header 匯出：先跳確認視窗，按「下載」才真的開始；一律匯出全部辨識完成的公文。
+const exportConfirmOverlay = document.getElementById("exportConfirmOverlay");
+const exportConfirmDownloadBtn = document.getElementById("exportConfirmDownloadBtn");
+function closeExportConfirm(){ exportConfirmOverlay.classList.remove("show"); }
+document.getElementById("exportMdBtn").addEventListener("click", () => {
+  const count = records.filter(r => r.status === "done").length;
+  if (!count) { alert("目前沒有可匯出的公文。"); return; }
+  document.getElementById("exportConfirmText").textContent =
+    `即將下載所有文件的 Markdown（共 ${count} 份已辨識完成的公文），請問確定下載嗎？`;
+  exportConfirmOverlay.classList.add("show");
+  exportConfirmDownloadBtn.focus();
+});
+document.getElementById("exportConfirmCancelBtn").addEventListener("click", closeExportConfirm);
+exportConfirmOverlay.addEventListener("click", (e) => { if (e.target === exportConfirmOverlay) closeExportConfirm(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeExportConfirm(); });
+exportConfirmDownloadBtn.addEventListener("click", async () => {
+  await exportMarkdown(records.filter(r => r.status === "done"), exportConfirmDownloadBtn);
+  closeExportConfirm();
 });
 
 document.getElementById("searchBox").addEventListener("input", renderTable);
